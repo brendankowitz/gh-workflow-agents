@@ -33037,25 +33037,34 @@ An issue is **ambiguous** if:
 - Codebase exploration reveals complexity not mentioned in the issue
 - Multiple implementation approaches exist without clear preference
 
-## Recommended Actions
-- **assign-to-agent**: Issue is actionable, validated against codebase, AND aligns with vision
-- **create-sub-issues**: Issue contains multiple actionable items \u2192 break into focused issues with specific file references
-- **request-clarification**: Issue is ambiguous or codebase exploration reveals questions
-- **close-as-wontfix**: Issue doesn't align with project vision OR is technically infeasible
-- **close-as-duplicate**: Feature/fix already exists in codebase OR duplicates another issue
-- **human-review**: Security concerns, complex architectural decisions, or high uncertainty
+## Recommended Actions (Decision Logic)
+
+IMPORTANT: If isActionable=true AND alignsWithVision=true, you MUST choose either "assign-to-agent" or "create-sub-issues". Do NOT choose "human-review" for actionable, aligned issues.
+
+- **assign-to-agent**: Single actionable issue that aligns with vision \u2192 assign to Copilot
+- **create-sub-issues**: Multiple actionable items OR research report \u2192 break into focused issues
+  - Create sub-issues for ALL items that are clearly actionable and aligned
+  - If some items are uncertain, still create sub-issues for the clear ones
+  - Note any uncertain items in the parent issue comment, don't block the clear ones
+- **request-clarification**: Issue is too ambiguous to act on at all
+- **close-as-wontfix**: Issue clearly conflicts with project vision
+- **close-as-duplicate**: Feature/fix already exists in codebase
+- **human-review**: ONLY for security concerns or when NOTHING is actionable
 
 ## When to Create Sub-Issues
 Use "create-sub-issues" when:
-- Issue is a research report with multiple recommendations
+- Issue is a research report with multiple recommendations \u2192 ALWAYS create sub-issues
 - Issue contains multiple unrelated tasks
 - Issue is too broad and needs focused, implementable pieces
-- Each sub-issue should reference specific files/areas of the codebase
 
-For sub-issues, include:
-- Specific files that need modification
+IMPORTANT: For research reports, create a sub-issue for EACH actionable recommendation. Don't skip items just because one item is uncertain.
+
+For each sub-issue, include:
+- Clear, specific title describing the task
+- Specific files that need modification (from your codebase exploration)
 - Clear acceptance criteria
 - Reference to parent issue for context
+- Appropriate labels (feature, bug, enhancement, priority:X)
 
 ## Output Format
 After exploring the codebase, respond with valid JSON:
