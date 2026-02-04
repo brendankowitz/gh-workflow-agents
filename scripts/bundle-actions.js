@@ -45,10 +45,14 @@ async function bundleAction(actionName) {
     platform: 'node',
     target: 'node20',
     outfile: join(distDir, 'index.js'),
-    format: 'cjs', // GitHub Actions requires CommonJS
+    format: 'esm', // ESM to match package.json "type": "module"
     minify: false, // Keep readable for debugging
     sourcemap: false,
     external: [], // Bundle everything
+    banner: {
+      // Shim for __dirname and __filename in ESM
+      js: `import { createRequire } from 'module'; import { fileURLToPath } from 'url'; const require = createRequire(import.meta.url); const __filename = fileURLToPath(import.meta.url); const __dirname = fileURLToPath(new URL('.', import.meta.url));`,
+    },
   });
 
   console.log(`  ✓ ${actionName} bundled to ${join(distDir, 'index.js')}`);
