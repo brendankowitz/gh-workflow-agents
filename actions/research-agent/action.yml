@@ -1,0 +1,73 @@
+name: 'GH-Agency Research Agent'
+description: |
+  Proactive codebase health monitoring and research.
+
+  This agent autonomously analyzes your repository for:
+  - Security vulnerabilities and advisories
+  - Outdated dependencies
+  - Technical debt
+  - Industry trends and feature suggestions
+
+  It can automatically create actionable issues for recommendations
+  that align with your project's vision.
+
+  Requires COPILOT_GITHUB_TOKEN environment variable set with a GitHub PAT
+  that has 'Copilot Requests: Read' permission for AI-powered analysis.
+
+  Required workflow permissions:
+    permissions:
+      issues: write        # Create and update issues
+      contents: read       # Read repository content (README, VISION.md, etc.)
+      security-events: read # Read Dependabot alerts (optional)
+
+author: 'Brendan Kowitz'
+
+branding:
+  icon: 'search'
+  color: 'green'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access (issues, repos, security). Must have write access to issues.'
+    required: true
+  copilot-token:
+    description: 'GitHub PAT with Copilot Requests permission (falls back to COPILOT_GITHUB_TOKEN env var)'
+    required: false
+  model:
+    description: 'AI model to use for analysis'
+    required: false
+    default: 'claude-sonnet-4.5'
+  output-type:
+    description: 'Where to output the summary report (issue, wiki, artifact)'
+    required: false
+    default: 'issue'
+  focus-areas:
+    description: 'Comma-separated list of areas to analyze (dependencies, security, technical-debt, industry-research)'
+    required: false
+    default: 'dependencies,security,technical-debt,industry-research'
+  create-actionable-issues:
+    description: 'Automatically create individual issues for actionable recommendations'
+    required: false
+    default: 'false'
+  min-priority-for-issue:
+    description: 'Minimum priority level for creating individual issues (low, medium, high, critical)'
+    required: false
+    default: 'high'
+
+outputs:
+  report:
+    description: 'Full research report as JSON'
+  dependency-updates:
+    description: 'Number of dependency updates available'
+  technical-debt-items:
+    description: 'Number of technical debt items identified'
+  security-advisories:
+    description: 'Number of open security advisories'
+  issues-created:
+    description: 'Number of actionable issues created'
+  issue-numbers:
+    description: 'Comma-separated list of created issue numbers'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

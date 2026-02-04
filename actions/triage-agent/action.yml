@@ -1,0 +1,57 @@
+name: 'GH-Agency Triage Agent'
+description: |
+  AI-powered issue classification and triage for GitHub repositories.
+
+  Requires COPILOT_GITHUB_TOKEN environment variable set with a GitHub PAT
+  that has 'Copilot Requests: Read' permission for AI analysis.
+author: 'Brendan Kowitz'
+
+branding:
+  icon: 'tag'
+  color: 'purple'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access (issues, labels, comments)'
+    required: true
+  copilot-token:
+    description: 'GitHub PAT with Copilot Requests permission (falls back to COPILOT_GITHUB_TOKEN env var)'
+    required: false
+  model:
+    description: 'AI model to use for classification'
+    required: false
+    default: 'claude-sonnet-4.5'
+  dry-run:
+    description: 'If true, only outputs analysis without making changes'
+    required: false
+    default: 'false'
+  enable-duplicate-detection:
+    description: 'Enable semantic search for duplicate issues'
+    required: false
+    default: 'true'
+  enable-auto-label:
+    description: 'Automatically apply suggested labels'
+    required: false
+    default: 'true'
+
+outputs:
+  classification:
+    description: 'Issue classification (bug, feature, question, documentation, spam)'
+  labels:
+    description: 'JSON array of suggested/applied labels'
+  priority:
+    description: 'Issue priority (low, medium, high, critical)'
+  summary:
+    description: 'AI-generated summary of the issue'
+  needs-human-review:
+    description: 'Whether the issue needs human review'
+  is-actionable:
+    description: 'Whether the issue is concrete and actionable (not ambiguous)'
+  aligns-with-vision:
+    description: 'Whether the issue aligns with project vision and goals'
+  recommended-action:
+    description: 'Recommended action (assign-to-agent, request-clarification, close-as-wontfix, close-as-duplicate, human-review)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
