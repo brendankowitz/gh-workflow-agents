@@ -50,6 +50,17 @@ interface ReviewConfig {
  * Main entry point for the review agent
  */
 export async function run(): Promise<void> {
+  // Handle uncaught errors from Copilot SDK stream issues
+  // The SDK can throw async errors even after we've stopped it
+  process.on('uncaughtException', (error) => {
+    if (error.message?.includes('stream') || error.message?.includes('ERR_STREAM_DESTROYED')) {
+      core.warning(`Suppressed async SDK error: ${error.message}`);
+    } else {
+      core.error(`Uncaught exception: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
   try {
     const config = getConfig();
 
@@ -379,6 +390,12 @@ ${securityFocus ? '## Security Focus Mode\nPay extra attention to security vulne
   } catch (error) {
     core.warning(`Copilot SDK error: ${error instanceof Error ? error.message : error}`);
     core.warning('Falling back to basic pattern-based analysis...');
+    // Stop the client immediately to prevent background errors
+    try {
+      await stopCopilotClient();
+    } catch {
+      // Ignore stop errors
+    }
     return createFallbackReviewResult(diff, files);
   }
 

@@ -32838,6 +32838,14 @@ Respond with valid JSON:
 
 // dist/actions/review-agent/index.js
 async function run() {
+  process.on("uncaughtException", (error3) => {
+    if (error3.message?.includes("stream") || error3.message?.includes("ERR_STREAM_DESTROYED")) {
+      core2.warning(`Suppressed async SDK error: ${error3.message}`);
+    } else {
+      core2.error(`Uncaught exception: ${error3.message}`);
+      process.exit(1);
+    }
+  });
   try {
     const config = getConfig();
     const actor = github.context.actor;
@@ -33018,6 +33026,10 @@ ${securityFocus ? "## Security Focus Mode\nPay extra attention to security vulne
   } catch (error3) {
     core2.warning(`Copilot SDK error: ${error3 instanceof Error ? error3.message : error3}`);
     core2.warning("Falling back to basic pattern-based analysis...");
+    try {
+      await stopCopilotClient();
+    } catch {
+    }
     return createFallbackReviewResult(diff, files);
   }
   if (response.finishReason === "error" || !response.content) {
