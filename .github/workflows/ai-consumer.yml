@@ -1,0 +1,45 @@
+# AI Consumer Testing Workflow
+# Reacts to upstream releases and runs integration tests
+#
+# SECURITY: Always pin to a specific commit SHA, not a branch or tag.
+# Update the SHA using Dependabot or manually after reviewing changes.
+
+name: Consumer Testing
+on:
+  repository_dispatch:
+    types: [upstream-release]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Enforce dispatch depth limit to prevent infinite loops
+    if: ${{ github.event.client_payload.dispatch_depth < 3 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Update Upstream Dependency
+        run: |
+          npm install upstream-package@${{ github.event.client_payload.version }}
+
+      - name: Consumer Agent
+        # TODO: Replace with actual commit SHA after first release
+        # Example: uses: brendankowitz/gh-workflow-agents/actions/consumer-agent@a1b2c3d4e5f6...
+        uses: brendankowitz/gh-workflow-agents/actions/consumer-agent@main
+        with:
+          github-token: ${{ secrets.CROSS_REPO_PAT }}
+          upstream-version: ${{ github.event.client_payload.version }}
+          test-command: 'npm test'
+          upstream-owner: 'owner'
+          upstream-repo: 'upstream-repo'

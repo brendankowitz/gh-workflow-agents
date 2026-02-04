@@ -1,0 +1,86 @@
+# Stale Issue Cleanup
+# Automatically closes issues that have been waiting for clarification too long
+#
+# This keeps the repository healthy by closing abandoned issues.
+
+name: Stale Issue Cleanup
+on:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Close Stale Issues
+        uses: actions/stale@v9
+        with:
+          stale-issue-message: |
+            This issue has been marked as stale because it has been waiting for a response for 14 days.
+            
+            If this issue is still relevant, please provide the requested information or add a comment to keep it open.
+            
+            The issue will be automatically closed in 7 days if no further activity occurs.
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity.
+            
+            If you believe this issue is still relevant, please open a new issue with updated information.
+          stale-issue-label: 'stale'
+          exempt-issue-labels: 'pinned,security,copilot-assigned'
+          days-before-issue-stale: 14
+          days-before-issue-close: 7
+          only-labels: 'status:needs-info'
+          remove-stale-when-updated: true
+
+      - name: Close Abandoned Clarification Requests  
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const daysStale = 21;
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysStale);
+            
+            // Find issues with needs-info label that are old
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'status:needs-info',
+              per_page: 50,
+            });
+            
+            for (const issue of issues.data) {
+              const updatedAt = new Date(issue.updated_at);
+              
+              if (updatedAt < cutoffDate) {
+                // Close the issue
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `## Issue Closed - No Response
+                  
+            This issue was waiting for clarification but no response was received within ${daysStale} days.
+
+            If this issue is still relevant, please open a new issue with the requested information.
+
+            ---
+            *Automated cleanup by GH-Agency*`,
+                });
+                
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'not_planned',
+                });
+                
+                console.log(`Closed stale issue #${issue.number}: ${issue.title}`);
+              }
+            }

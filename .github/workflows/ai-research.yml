@@ -1,0 +1,46 @@
+# AI Research Workflow
+# Weekly codebase health monitoring and reporting
+#
+# SECURITY: Always pin to a specific commit SHA, not a branch or tag.
+# Update the SHA using Dependabot or manually after reviewing changes.
+#
+# REQUIRED SECRETS:
+# - COPILOT_GITHUB_TOKEN: GitHub PAT with "Copilot Requests: Read" permission
+#
+# REQUIRED PERMISSIONS:
+# - issues: write        - Create and update research report issues
+# - contents: read       - Read repository files (README, VISION.md, etc.)
+# - security-events: read - Read Dependabot security alerts (optional)
+
+name: AI Research Report
+on:
+  schedule:
+    # Run every Monday at 9am UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write          # Required: Create/update issues
+      contents: read         # Required: Read repo content for context
+      security-events: read  # Optional: Read Dependabot alerts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: AI Research
+        # TODO: Replace with actual commit SHA after first release
+        # Example: uses: brendankowitz/gh-workflow-agents/actions/research-agent@a1b2c3d4e5f6...
+        uses: brendankowitz/gh-workflow-agents/actions/research-agent@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          model: claude-sonnet-4.5
+          output-type: issue
+          focus-areas: 'dependencies,security,technical-debt,industry-research'
+          # Autonomous issue creation settings:
+          create-actionable-issues: 'true'  # Auto-create issues for recommendations
+          min-priority-for-issue: 'high'    # Only create issues for high/critical priority
