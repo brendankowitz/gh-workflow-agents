@@ -33105,6 +33105,11 @@ function buildReviewComment(result) {
       sections.push(`- **${issue.file}**: ${issue.description}`);
     }
   }
+  const hasFixableIssues = result.securityIssues.length > 0 || result.codeQualityIssues.length > 0;
+  if (hasFixableIssues && result.overallAssessment !== "approve") {
+    sections.push("\n---\n");
+    sections.push("@copilot please address the issues identified above.");
+  }
   sections.push("\n---\n*Review by GH-Agency Review Agent*");
   return sections.join("\n");
 }
