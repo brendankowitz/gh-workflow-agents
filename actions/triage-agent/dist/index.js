@@ -33121,7 +33121,18 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
     const userPrompt = buildSecurePrompt({ title: issue.title, body: issue.body }, { title: sanitized.title.sanitized, body: sanitized.body.sanitized }, instructions);
     core2.info(`Analyzing issue with Copilot SDK (model: ${config.model})...`);
     const result = await analyzeIssue(systemPrompt, userPrompt, config.model, sanitized);
-    const validated = validateTriageOutput(result);
+    let validated = validateTriageOutput(result);
+    const isResearchReport = issue.title.toLowerCase().includes("research report") || issue.body.includes("GH-Agency Research Agent") || validated.classification === "research-report";
+    if (isResearchReport && validated.isActionable && validated.alignsWithVision) {
+      if (validated.recommendedAction === "human-review") {
+        core2.info("Overriding human-review to create-sub-issues for actionable research report");
+        validated = {
+          ...validated,
+          classification: "research-report",
+          recommendedAction: "create-sub-issues"
+        };
+      }
+    }
     core2.setOutput("classification", validated.classification);
     core2.setOutput("labels", JSON.stringify(validated.labels));
     core2.setOutput("priority", validated.priority);

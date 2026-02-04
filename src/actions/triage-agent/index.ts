@@ -272,7 +272,24 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
     const result = await analyzeIssue(systemPrompt, userPrompt, config.model, sanitized);
 
     // Validate the result
-    const validated = validateTriageOutput(result);
+    let validated = validateTriageOutput(result);
+
+    // ENFORCE: Research reports that are actionable and aligned MUST create sub-issues
+    const isResearchReport =
+      issue.title.toLowerCase().includes('research report') ||
+      issue.body.includes('GH-Agency Research Agent') ||
+      validated.classification === 'research-report';
+
+    if (isResearchReport && validated.isActionable && validated.alignsWithVision) {
+      if (validated.recommendedAction === 'human-review') {
+        core.info('Overriding human-review to create-sub-issues for actionable research report');
+        validated = {
+          ...validated,
+          classification: 'research-report',
+          recommendedAction: 'create-sub-issues',
+        };
+      }
+    }
 
     // Output results
     core.setOutput('classification', validated.classification);
