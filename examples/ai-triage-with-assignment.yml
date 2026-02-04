@@ -2,6 +2,9 @@
 # Classifies issues and automatically assigns actionable ones to Copilot
 #
 # SECURITY: Always pin to a specific commit SHA, not a branch or tag.
+#
+# REQUIRED SECRETS:
+# - COPILOT_GITHUB_TOKEN: GitHub PAT with "Copilot Requests: Read" permission
 
 name: AI Issue Triage
 on:
@@ -9,9 +12,15 @@ on:
     types: [opened, edited]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to triage'
+        required: true
+        type: number
 
 concurrency:
-  group: ai-triage-${{ github.event.issue.number }}
+  group: ai-triage-${{ github.event.issue.number || github.event.inputs.issue_number }}
   cancel-in-progress: true
 
 jobs:
@@ -21,18 +30,39 @@ jobs:
       issues: write
       contents: read
 
+    # Always run for workflow_dispatch (manual trigger)
     if: |
-      github.actor != 'github-actions[bot]' &&
-      github.actor != 'dependabot[bot]' &&
-      !contains(github.event.comment.body || '', '/stop') &&
-      !contains(github.event.comment.body || '', '/human')
+      github.event_name == 'workflow_dispatch' || (
+        github.actor != 'github-actions[bot]' &&
+        github.actor != 'dependabot[bot]' &&
+        !contains(github.event.comment.body || '', '/stop') &&
+        !contains(github.event.comment.body || '', '/human')
+      )
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub Copilot CLI
+        run: |
+          npm install -g @github/copilot
+          echo "GitHub Copilot CLI installed at: $(which copilot || echo 'not in path')"
+          copilot --version || echo "CLI installed"
+
       - name: AI Triage
         id: triage
         uses: brendankowitz/gh-workflow-agents/actions/triage-agent@main
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.issue_number || '' }}
           model: claude-sonnet-4.5
           enable-duplicate-detection: 'true'
           enable-auto-label: 'true'
@@ -43,29 +73,3 @@ jobs:
           echo "Actionable: ${{ steps.triage.outputs.is-actionable }}"
           echo "Vision Aligned: ${{ steps.triage.outputs.aligns-with-vision }}"
           echo "Recommended Action: ${{ steps.triage.outputs.recommended-action }}"
-
----
-# Copilot Agent Trigger Workflow
-# Responds to triage agent's assignment dispatch
-
-name: Copilot Issue Assignment
-on:
-  repository_dispatch:
-    types: [copilot-issue-assigned]
-
-jobs:
-  implement:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Start Copilot Agent
-        uses: github/copilot-swe-agent@v1
-        with:
-          issue: ${{ github.event.client_payload.issue_number }}
-          instructions: ${{ github.event.client_payload.instructions }}
