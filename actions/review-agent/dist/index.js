@@ -33012,7 +33012,14 @@ ${securityFocus ? "## Security Focus Mode\nPay extra attention to security vulne
   `.trim();
   const userPrompt = buildReviewPrompt(diff, instructions);
   core2.info(`Analyzing PR with Copilot SDK (model: ${model})...`);
-  const response = await sendPrompt(systemPrompt, userPrompt, { model });
+  let response;
+  try {
+    response = await sendPrompt(systemPrompt, userPrompt, { model });
+  } catch (error3) {
+    core2.warning(`Copilot SDK error: ${error3 instanceof Error ? error3.message : error3}`);
+    core2.warning("Falling back to basic pattern-based analysis...");
+    return createFallbackReviewResult(diff, files);
+  }
   if (response.finishReason === "error" || !response.content) {
     core2.warning("Copilot SDK returned an error, falling back to basic analysis");
     return createFallbackReviewResult(diff, files);

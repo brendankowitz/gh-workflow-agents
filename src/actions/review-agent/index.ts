@@ -371,9 +371,16 @@ ${securityFocus ? '## Security Focus Mode\nPay extra attention to security vulne
 
   const userPrompt = buildReviewPrompt(diff, instructions);
 
-  // Send to Copilot SDK
+  // Send to Copilot SDK with error handling for stream issues
   core.info(`Analyzing PR with Copilot SDK (model: ${model})...`);
-  const response = await sendPrompt(systemPrompt, userPrompt, { model });
+  let response;
+  try {
+    response = await sendPrompt(systemPrompt, userPrompt, { model });
+  } catch (error) {
+    core.warning(`Copilot SDK error: ${error instanceof Error ? error.message : error}`);
+    core.warning('Falling back to basic pattern-based analysis...');
+    return createFallbackReviewResult(diff, files);
+  }
 
   if (response.finishReason === 'error' || !response.content) {
     core.warning('Copilot SDK returned an error, falling back to basic analysis');
