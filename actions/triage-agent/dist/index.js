@@ -33229,6 +33229,8 @@ ${validated.reasoning}`;
         if (subIssuesToCreate && subIssuesToCreate.length > 0) {
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core2.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map((n) => `#${n}`).join(", ")}`);
+          await closeIssue(octokit, ref, `This research report has been processed and broken down into ${createdIssues.length} actionable sub-issues. Closing as completed.`, "completed");
+          core2.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
           core2.warning(`Unable to generate sub-issues for research report`);
           await createComment(octokit, ref, `## \u{1F916} AI Triage Summary

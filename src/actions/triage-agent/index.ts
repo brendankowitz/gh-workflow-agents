@@ -417,6 +417,15 @@ This will help ensure the issue can be properly addressed.
         if (subIssuesToCreate && subIssuesToCreate.length > 0) {
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map(n => `#${n}`).join(', ')}`);
+
+          // Close the parent issue - it's been fully processed
+          await closeIssue(
+            octokit,
+            ref,
+            `This research report has been processed and broken down into ${createdIssues.length} actionable sub-issues. Closing as completed.`,
+            'completed'
+          );
+          core.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
           core.warning(`Unable to generate sub-issues for research report`);
           await createComment(octokit, ref, `## 🤖 AI Triage Summary
