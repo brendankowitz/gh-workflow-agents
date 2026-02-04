@@ -1,0 +1,49 @@
+# AI Issue Triage Workflow
+# Automatically classifies and labels new issues using AI
+#
+# SECURITY: Always pin to a specific commit SHA, not a branch or tag.
+# Update the SHA using Dependabot or manually after reviewing changes.
+#
+# REQUIRED SECRETS:
+# - COPILOT_GITHUB_TOKEN: GitHub PAT with "Copilot Requests: Read" permission
+
+name: AI Issue Triage
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+
+# Prevent duplicate runs
+concurrency:
+  group: ai-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    # Prevent self-triggering loops and respect stop commands
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      github.actor != 'dependabot[bot]' &&
+      !contains(github.event.comment.body || '', '/stop') &&
+      !contains(github.event.comment.body || '', '/override') &&
+      !contains(github.event.comment.body || '', '/human') &&
+      !contains(github.event.comment.body || '', '/halt') &&
+      !contains(github.event.comment.body || '', '/cancel')
+
+    steps:
+      - name: AI Triage
+        # TODO: Replace with actual commit SHA after first release
+        # Example: uses: brendankowitz/gh-workflow-agents/actions/triage-agent@a1b2c3d4e5f6...
+        uses: brendankowitz/gh-workflow-agents/actions/triage-agent@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          model: claude-sonnet-4.5
+          enable-duplicate-detection: 'true'
+          enable-auto-label: 'true'

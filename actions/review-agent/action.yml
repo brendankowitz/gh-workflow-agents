@@ -1,0 +1,51 @@
+name: 'GH-Agency Review Agent'
+description: |
+  AI-powered code review for pull requests with security focus.
+
+  Requires COPILOT_GITHUB_TOKEN environment variable set with a GitHub PAT
+  that has 'Copilot Requests: Read' permission for AI analysis.
+author: 'Brendan Kowitz'
+
+branding:
+  icon: 'git-pull-request'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access (PRs, reviews, comments)'
+    required: true
+  copilot-token:
+    description: 'GitHub PAT with Copilot Requests permission (falls back to COPILOT_GITHUB_TOKEN env var)'
+    required: false
+  model:
+    description: 'AI model to use for review'
+    required: false
+    default: 'claude-sonnet-4.5'
+  mode:
+    description: 'Review mode: analyze-only (for split workflow) or full'
+    required: false
+    default: 'full'
+  auto-approve-dependabot:
+    description: 'Auto-approve Dependabot PRs with only package file changes'
+    required: false
+    default: 'true'
+  security-focus:
+    description: 'Prioritize security analysis'
+    required: false
+    default: 'true'
+
+outputs:
+  assessment:
+    description: 'Overall assessment (approve, request-changes, comment)'
+  security-issues:
+    description: 'JSON array of security issues found'
+  quality-issues:
+    description: 'JSON array of code quality issues found'
+  summary:
+    description: 'Summary of the review'
+  review-result:
+    description: 'Full review result JSON (for analyze-only mode)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

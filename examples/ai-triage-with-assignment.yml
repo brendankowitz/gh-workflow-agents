@@ -1,0 +1,71 @@
+# AI Issue Triage with Automatic Assignment
+# Classifies issues and automatically assigns actionable ones to Copilot
+#
+# SECURITY: Always pin to a specific commit SHA, not a branch or tag.
+
+name: AI Issue Triage
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ai-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      github.actor != 'dependabot[bot]' &&
+      !contains(github.event.comment.body || '', '/stop') &&
+      !contains(github.event.comment.body || '', '/human')
+
+    steps:
+      - name: AI Triage
+        id: triage
+        uses: brendankowitz/gh-workflow-agents/actions/triage-agent@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-sonnet-4.5
+          enable-duplicate-detection: 'true'
+          enable-auto-label: 'true'
+
+      - name: Log Decision
+        run: |
+          echo "Classification: ${{ steps.triage.outputs.classification }}"
+          echo "Actionable: ${{ steps.triage.outputs.is-actionable }}"
+          echo "Vision Aligned: ${{ steps.triage.outputs.aligns-with-vision }}"
+          echo "Recommended Action: ${{ steps.triage.outputs.recommended-action }}"
+
+---
+# Copilot Agent Trigger Workflow
+# Responds to triage agent's assignment dispatch
+
+name: Copilot Issue Assignment
+on:
+  repository_dispatch:
+    types: [copilot-issue-assigned]
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Copilot Agent
+        uses: github/copilot-swe-agent@v1
+        with:
+          issue: ${{ github.event.client_payload.issue_number }}
+          instructions: ${{ github.event.client_payload.instructions }}

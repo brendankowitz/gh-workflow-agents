@@ -1,0 +1,41 @@
+name: 'GH-Agency Consumer Agent'
+description: 'Consumer-driven contract testing for downstream repositories'
+author: 'Brendan Kowitz'
+
+branding:
+  icon: 'check-circle'
+  color: 'orange'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+  upstream-version:
+    description: 'Upstream version to test against (from dispatch payload if not specified)'
+    required: false
+  test-command:
+    description: 'Command to run tests'
+    required: false
+    default: 'npm test'
+  upstream-owner:
+    description: 'Owner of upstream repository (for failure reporting)'
+    required: false
+  upstream-repo:
+    description: 'Name of upstream repository (for failure reporting)'
+    required: false
+
+outputs:
+  success:
+    description: 'Whether all tests passed'
+  tests-run:
+    description: 'Number of tests run'
+  tests-passed:
+    description: 'Number of tests passed'
+  tests-failed:
+    description: 'Number of tests failed'
+  compatibility-breaking:
+    description: 'Whether failure indicates a breaking change'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

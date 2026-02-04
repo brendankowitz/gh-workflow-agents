@@ -410,9 +410,33 @@ FodyWeavers.xsd
 # Built Visual Studio Code Extensions
 *.vsix
 
+# Node.js
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Package manager locks (optional - uncomment if you want to track)
+# package-lock.json
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
 # Windows Installer files from build outputs
 *.cab
 *.msi
 *.msix
 *.msm
 *.msp
+
+# Local environment
+.env
+.env.*
