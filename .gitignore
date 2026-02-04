@@ -412,8 +412,11 @@ FodyWeavers.xsd
 
 # Node.js
 node_modules/
-dist/
+/dist/
 *.tsbuildinfo
+
+# But include action dist folders (needed for GitHub Actions)
+!actions/*/dist/
 
 # Package manager locks (optional - uncomment if you want to track)
 # package-lock.json
@@ -440,3 +443,4 @@ Thumbs.db
 # Local environment
 .env
 .env.*
+repo/
