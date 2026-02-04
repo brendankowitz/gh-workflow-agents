@@ -17,6 +17,9 @@ inputs:
   copilot-token:
     description: 'GitHub PAT with Copilot Requests permission (falls back to COPILOT_GITHUB_TOKEN env var)'
     required: false
+  issue-number:
+    description: 'Issue number to triage (defaults to github.event.issue.number)'
+    required: false
   model:
     description: 'AI model to use for classification'
     required: false
