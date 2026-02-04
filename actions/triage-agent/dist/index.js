@@ -31289,24 +31289,17 @@ async function assignToCodingAgent(octokit, ref, instructions) {
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `## \u{1F916} Assigned to Copilot Coding Agent
+    body: `@github-copilot please implement this issue.
+
+## Assignment Details
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 
-**Assignment Instructions:**
+**Instructions:**
 ${instructions}
 
 ---
-*The Copilot coding agent will create a pull request to address this issue.*`
-  });
-  await octokit.rest.repos.createDispatchEvent({
-    owner: ref.owner,
-    repo: ref.repo,
-    event_type: "copilot-issue-assigned",
-    client_payload: {
-      issue_number: ref.issueNumber,
-      instructions
-    }
+*Copilot will create a pull request to address this issue.*`
   });
 }
 async function requestClarification(octokit, ref, questions) {
