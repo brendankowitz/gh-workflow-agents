@@ -36,6 +36,7 @@ export {
 // Copilot client
 export {
   getCopilotClient,
+  stopCopilotClient,
   sendPrompt,
   createAgentSession,
   AgentSession,

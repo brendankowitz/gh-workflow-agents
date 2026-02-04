@@ -25,6 +25,7 @@ import {
   createResearchSystemPrompt,
   sendPrompt,
   parseAgentResponse,
+  stopCopilotClient,
   type IssueRef,
 } from '../../sdk/index.js';
 
@@ -128,6 +129,13 @@ export async function run(): Promise<void> {
       core.setFailed(error.message);
     } else {
       core.setFailed('An unknown error occurred');
+    }
+  } finally {
+    // Clean up Copilot CLI process to ensure action exits
+    try {
+      await stopCopilotClient();
+    } catch {
+      // Ignore cleanup errors
     }
   }
 }

@@ -32394,6 +32394,13 @@ async function getCopilotClient() {
   }
   return copilotClientInstance;
 }
+async function stopCopilotClient() {
+  if (copilotClientInstance) {
+    await copilotClientInstance.stop();
+    copilotClientInstance = null;
+    core.info("Copilot SDK client stopped");
+  }
+}
 async function sendPrompt(systemPrompt, userPrompt, options = {}) {
   const client = await getCopilotClient();
   const model = options.model || "claude-sonnet-4.5";
@@ -32522,6 +32529,11 @@ async function run() {
       core2.setFailed(error2.message);
     } else {
       core2.setFailed("An unknown error occurred");
+    }
+  } finally {
+    try {
+      await stopCopilotClient();
+    } catch {
     }
   }
 }
