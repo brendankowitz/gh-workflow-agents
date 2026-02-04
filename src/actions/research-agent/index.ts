@@ -19,13 +19,8 @@ import {
 import {
   createOctokit,
   loadRepositoryContext,
-  formatContextForPrompt,
   createAuditEntry,
   logAgentDecision,
-  createResearchSystemPrompt,
-  sendPrompt,
-  parseAgentResponse,
-  stopCopilotClient,
   type IssueRef,
 } from '../../sdk/index.js';
 
@@ -130,15 +125,6 @@ export async function run(): Promise<void> {
     } else {
       core.setFailed('An unknown error occurred');
     }
-  } finally {
-    // Clean up Copilot CLI process to ensure action exits
-    try {
-      await stopCopilotClient();
-    } catch {
-      // Ignore cleanup errors
-    }
-    // Force exit to ensure no hanging handles keep the process alive
-    setTimeout(() => process.exit(0), 1000);
   }
 }
 
@@ -323,9 +309,9 @@ async function analyzeIndustryTrends(
     featureSuggestions.push(...consolidatedSuggestions);
   }
 
-  // Generate industry insights based on repository analysis using Copilot SDK
+  // Generate industry insights based on repository topics
   if (repoDescription || repoTopics.length > 0) {
-    const insights = await generateIndustryInsights(repoTopics, repoDescription, repoContext, config.model);
+    const insights = generateIndustryInsights(repoTopics, repoDescription, repoContext, config.model);
     industryInsights.push(...insights);
   }
 
@@ -575,71 +561,18 @@ function consolidateFeatureSuggestions(suggestions: FeatureSuggestion[]): Featur
 }
 
 /**
- * Generates industry insights using Copilot SDK
+ * Generates industry insights based on repository topics
+ * Uses heuristic-based fallback insights instead of Copilot SDK
+ * to avoid stream stability issues in CI environments
  */
-async function generateIndustryInsights(
+function generateIndustryInsights(
   topics: string[],
-  description: string,
-  repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>,
-  model: string
-): Promise<IndustryInsight[]> {
-  const contextSection = formatContextForPrompt(repoContext);
-
-  const systemPrompt = createResearchSystemPrompt()
-    .replace('{project_name}', `${repoContext.owner}/${repoContext.name}`)
-    .replace('{context}', contextSection);
-
-  const userPrompt = `
-Analyze the following repository information and generate industry insights:
-
-## Repository Topics
-${topics.length > 0 ? topics.join(', ') : 'No topics specified'}
-
-## Description
-${description || 'No description available'}
-
-## Task
-Generate 3-5 relevant industry insights for this project. Consider:
-1. Current trends in the relevant technology domains
-2. Opportunities for the project based on industry direction
-3. Actionable recommendations
-
-## Output Format
-Respond with valid JSON:
-{
-  "industryInsights": [
-    {
-      "topic": "Topic name",
-      "summary": "Brief summary of the trend",
-      "relevance": "How this applies to the project",
-      "sources": ["Source 1", "Source 2"],
-      "actionable": true
-    }
-  ]
-}
-  `.trim();
-
-  try {
-    core.info('Generating industry insights with Copilot SDK...');
-    const response = await sendPrompt(systemPrompt, userPrompt, { model });
-
-    if (response.finishReason === 'error' || !response.content) {
-      core.warning('Copilot SDK returned an error, using fallback insights');
-      return generateFallbackInsights(topics);
-    }
-
-    const parsed = parseAgentResponse<{ industryInsights: IndustryInsight[] }>(response.content);
-
-    if (!parsed || !parsed.industryInsights) {
-      core.warning('Failed to parse insights, using fallback');
-      return generateFallbackInsights(topics);
-    }
-
-    return parsed.industryInsights.slice(0, 5);
-  } catch (error) {
-    core.warning(`Industry insights generation failed: ${error instanceof Error ? error.message : String(error)}`);
-    return generateFallbackInsights(topics);
-  }
+  _description: string,
+  _repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>,
+  _model: string
+): IndustryInsight[] {
+  core.info('Generating industry insights based on repository topics...');
+  return generateFallbackInsights(topics);
 }
 
 /**
