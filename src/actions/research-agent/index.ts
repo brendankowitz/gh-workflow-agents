@@ -137,6 +137,8 @@ export async function run(): Promise<void> {
     } catch {
       // Ignore cleanup errors
     }
+    // Force exit to ensure no hanging handles keep the process alive
+    setTimeout(() => process.exit(0), 1000);
   }
 }
 

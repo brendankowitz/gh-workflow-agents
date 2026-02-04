@@ -32536,6 +32536,7 @@ async function run() {
       await stopCopilotClient();
     } catch {
     }
+    setTimeout(() => process.exit(0), 1e3);
   }
 }
 function getConfig() {
