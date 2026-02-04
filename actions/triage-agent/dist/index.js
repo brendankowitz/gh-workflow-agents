@@ -32954,9 +32954,10 @@ async function run() {
     }
     const circuitBreaker = createCircuitBreakerContext();
     checkCircuitBreaker(circuitBreaker);
-    const issue = getIssueFromContext();
+    const octokit = createOctokit(config.githubToken);
+    const issue = await getIssueFromContext(octokit);
     if (!issue) {
-      core2.setFailed("No issue found in event context");
+      core2.setFailed("No issue found in event context or input");
       return;
     }
     if (hasStopCommand(issue.body)) {
@@ -32968,7 +32969,6 @@ async function run() {
       core2.info("Stop command detected in comment, skipping triage");
       return;
     }
-    const octokit = createOctokit(config.githubToken);
     const ref = {
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
@@ -33317,7 +33317,7 @@ function getConfig() {
     enableAutoLabel: core2.getBooleanInput("enable-auto-label")
   };
 }
-function getIssueFromContext() {
+async function getIssueFromContext(octokit) {
   const payload = github.context.payload;
   if (payload.issue) {
     return {
@@ -33325,6 +33325,26 @@ function getIssueFromContext() {
       title: payload.issue.title || "",
       body: payload.issue.body || ""
     };
+  }
+  const issueNumberInput = core2.getInput("issue-number");
+  if (issueNumberInput && octokit) {
+    const issueNumber = parseInt(issueNumberInput, 10);
+    if (!isNaN(issueNumber)) {
+      try {
+        const { data } = await octokit.rest.issues.get({
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          issue_number: issueNumber
+        });
+        return {
+          number: data.number,
+          title: data.title,
+          body: data.body || ""
+        };
+      } catch (error2) {
+        core2.warning(`Failed to fetch issue #${issueNumber}: ${error2 instanceof Error ? error2.message : String(error2)}`);
+      }
+    }
   }
   return null;
 }

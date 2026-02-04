@@ -68,10 +68,13 @@ export async function run(): Promise<void> {
     const circuitBreaker = createCircuitBreakerContext();
     checkCircuitBreaker(circuitBreaker);
 
-    // Get issue data from event
-    const issue = getIssueFromContext();
+    // Create Octokit instance first (needed for workflow_dispatch to fetch issue)
+    const octokit = createOctokit(config.githubToken);
+
+    // Get issue data from event or input
+    const issue = await getIssueFromContext(octokit);
     if (!issue) {
-      core.setFailed('No issue found in event context');
+      core.setFailed('No issue found in event context or input');
       return;
     }
 
@@ -87,9 +90,6 @@ export async function run(): Promise<void> {
       core.info('Stop command detected in comment, skipping triage');
       return;
     }
-
-    // Create Octokit instance
-    const octokit = createOctokit(config.githubToken);
     const ref: IssueRef = {
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
@@ -537,17 +537,44 @@ function getConfig(): TriageConfig {
 }
 
 /**
- * Extracts issue data from GitHub context
+ * Extracts issue data from GitHub context or input
+ *
+ * @param octokit - Optional Octokit instance for fetching issue when using workflow_dispatch
  */
-function getIssueFromContext(): { number: number; title: string; body: string } | null {
+async function getIssueFromContext(
+  octokit?: ReturnType<typeof createOctokit>
+): Promise<{ number: number; title: string; body: string } | null> {
   const payload = github.context.payload;
 
+  // First check if issue is in payload (issue event)
   if (payload.issue) {
     return {
       number: payload.issue.number,
       title: payload.issue.title || '',
       body: payload.issue.body || '',
     };
+  }
+
+  // Check for issue-number input (workflow_dispatch)
+  const issueNumberInput = core.getInput('issue-number');
+  if (issueNumberInput && octokit) {
+    const issueNumber = parseInt(issueNumberInput, 10);
+    if (!isNaN(issueNumber)) {
+      try {
+        const { data } = await octokit.rest.issues.get({
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          issue_number: issueNumber,
+        });
+        return {
+          number: data.number,
+          title: data.title,
+          body: data.body || '',
+        };
+      } catch (error) {
+        core.warning(`Failed to fetch issue #${issueNumber}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   return null;

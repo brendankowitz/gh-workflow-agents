@@ -22,7 +22,7 @@ on:
 
 # Prevent duplicate runs
 concurrency:
-  group: ai-triage-${{ github.event.issue.number }}
+  group: ai-triage-${{ github.event.issue.number || github.event.inputs.issue_number }}
   cancel-in-progress: true
 
 jobs:
@@ -36,16 +36,19 @@ jobs:
     # - Skip if issue already has triage labels (prevents re-triage loops)
     # - Skip dependabot issues (not relevant for feature triage)
     # - Respect stop commands
+    # - Always run for workflow_dispatch (manual trigger)
     if: |
-      github.actor != 'dependabot[bot]' &&
-      !contains(join(github.event.issue.labels.*.name, ','), 'status:triage') &&
-      !contains(join(github.event.issue.labels.*.name, ','), 'triaged') &&
-      !contains(join(github.event.issue.labels.*.name, ','), 'agent-assigned') &&
-      !contains(github.event.comment.body || '', '/stop') &&
-      !contains(github.event.comment.body || '', '/override') &&
-      !contains(github.event.comment.body || '', '/human') &&
-      !contains(github.event.comment.body || '', '/halt') &&
-      !contains(github.event.comment.body || '', '/cancel')
+      github.event_name == 'workflow_dispatch' || (
+        github.actor != 'dependabot[bot]' &&
+        !contains(join(github.event.issue.labels.*.name, ','), 'status:triage') &&
+        !contains(join(github.event.issue.labels.*.name, ','), 'triaged') &&
+        !contains(join(github.event.issue.labels.*.name, ','), 'agent-assigned') &&
+        !contains(github.event.comment.body || '', '/stop') &&
+        !contains(github.event.comment.body || '', '/override') &&
+        !contains(github.event.comment.body || '', '/human') &&
+        !contains(github.event.comment.body || '', '/halt') &&
+        !contains(github.event.comment.body || '', '/cancel')
+      )
 
     steps:
       - name: Checkout
@@ -71,6 +74,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.issue_number || '' }}
           model: claude-sonnet-4.5
           enable-duplicate-detection: 'true'
           enable-auto-label: 'true'
