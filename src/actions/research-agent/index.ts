@@ -888,7 +888,7 @@ async function createActionableIssuesFromReport(
     }
 
     // Check for duplicate
-    const isDuplicate = await checkForDuplicateIssue(rec, existingIssues, octokit, owner, repo, repoContext, config.model);
+    const isDuplicate = checkForDuplicateIssue(rec, existingIssues);
     if (isDuplicate) {
       core.info(`Skipping "${rec.title}" - similar issue already exists`);
       continue;
@@ -1078,17 +1078,12 @@ async function getExistingIssues(
 
 /**
  * Checks if a recommendation is similar to an existing issue
- * Uses AI to determine semantic similarity when title matching isn't conclusive
+ * Uses title matching heuristics to detect duplicates
  */
-async function checkForDuplicateIssue(
+function checkForDuplicateIssue(
   rec: ActionableRecommendation,
-  existingIssues: Array<{ number: number; title: string; body: string | null }>,
-  octokit: ReturnType<typeof createOctokit>,
-  owner: string,
-  repo: string,
-  repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>,
-  model: string
-): Promise<boolean> {
+  existingIssues: Array<{ number: number; title: string; body: string | null }>
+): boolean {
   // First, do a quick title similarity check
   const recTitleLower = rec.title.toLowerCase();
   const recKeywords = recTitleLower.split(/\s+/).filter((w) => w.length > 3);
@@ -1108,60 +1103,8 @@ async function checkForDuplicateIssue(
     }
   }
 
-  // If no obvious match, use AI for semantic similarity on top candidates
-  const topCandidates = existingIssues
-    .filter((issue) => {
-      const issueTitleLower = issue.title.toLowerCase();
-      // Same category keywords
-      return (
-        (rec.category === 'security' && issueTitleLower.includes('security')) ||
-        (rec.category === 'dependencies' && (issueTitleLower.includes('dependency') || issueTitleLower.includes('update'))) ||
-        (rec.category === 'technical-debt' && (issueTitleLower.includes('debt') || issueTitleLower.includes('refactor')))
-      );
-    })
-    .slice(0, 5);
-
-  if (topCandidates.length === 0) {
-    return false;
-  }
-
-  // Use AI to check for semantic duplicates
-  try {
-    const systemPrompt = `You are a duplicate detection system. Compare a new recommendation against existing issues and determine if any existing issue covers the same topic.
-
-Respond with JSON only:
-{
-  "isDuplicate": true | false,
-  "matchingIssueNumber": <number> | null,
-  "confidence": "high" | "medium" | "low",
-  "reason": "explanation"
-}`;
-
-    const userPrompt = `## New Recommendation
-Title: ${rec.title}
-Description: ${rec.description.substring(0, 500)}
-
-## Existing Issues
-${topCandidates.map((i) => `#${i.number}: ${i.title}\n${i.body?.substring(0, 200) || '(no body)'}`).join('\n\n')}
-
-Are any of the existing issues duplicates of or already cover the new recommendation?`;
-
-    const response = await sendPrompt(systemPrompt, userPrompt, { model });
-    const parsed = parseAgentResponse<{
-      isDuplicate: boolean;
-      matchingIssueNumber: number | null;
-      confidence: string;
-      reason: string;
-    }>(response.content);
-
-    if (parsed && parsed.isDuplicate && parsed.confidence !== 'low') {
-      core.info(`AI detected duplicate: ${parsed.reason} (issue #${parsed.matchingIssueNumber})`);
-      return true;
-    }
-  } catch (error) {
-    core.warning(`AI duplicate detection failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
-
+  // No obvious duplicate found based on title matching
+  // Skip AI-based duplicate detection to avoid Copilot SDK stream issues
   return false;
 }
 
