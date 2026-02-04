@@ -66,11 +66,51 @@ export interface CompletionOptions {
 let copilotClientInstance: GHCopilotClient | null = null;
 
 /**
+ * Checks if Copilot authentication is available
+ * Returns false if no valid token is configured, preventing 5-minute timeout
+ */
+export function hasCopilotAuth(): boolean {
+  // Check for supported authentication methods in priority order
+  const copilotToken = process.env.COPILOT_GITHUB_TOKEN;
+  const ghToken = process.env.GH_TOKEN;
+  const githubToken = process.env.GITHUB_TOKEN;
+
+  // COPILOT_GITHUB_TOKEN or GH_TOKEN should be a PAT with Copilot access
+  // GITHUB_TOKEN from Actions doesn't have Copilot permissions
+  if (copilotToken && copilotToken.length > 0) {
+    return true;
+  }
+
+  if (ghToken && ghToken.length > 0) {
+    return true;
+  }
+
+  // GITHUB_TOKEN from Actions (ghs_ prefix) doesn't have Copilot access
+  // Only treat it as valid if it looks like a PAT (github_pat_, gho_, ghu_)
+  if (githubToken && githubToken.length > 0) {
+    if (githubToken.startsWith('github_pat_') ||
+        githubToken.startsWith('gho_') ||
+        githubToken.startsWith('ghu_')) {
+      return true;
+    }
+    // ghs_ tokens (GitHub Actions) don't have Copilot access
+    core.debug('GITHUB_TOKEN appears to be an Actions token without Copilot access');
+  }
+
+  return false;
+}
+
+/**
  * Checks if the Copilot CLI is available
  * The SDK requires the CLI to be installed locally
  */
 export async function isCopilotAvailable(): Promise<boolean> {
-  // Always try to use Copilot - the CLI should be installed
+  // First check if we have valid authentication
+  if (!hasCopilotAuth()) {
+    core.warning('No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN with a fine-grained PAT that has Copilot access.');
+    return false;
+  }
+
   // The workflow installs @github/copilot before running
   return true;
 }

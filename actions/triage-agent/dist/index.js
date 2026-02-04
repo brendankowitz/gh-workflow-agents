@@ -399,7 +399,7 @@ var require_tunnel = __commonJS({
         connectOptions.headers = connectOptions.headers || {};
         connectOptions.headers["Proxy-Authorization"] = "Basic " + new Buffer(connectOptions.proxyAuth).toString("base64");
       }
-      debug2("making CONNECT request");
+      debug3("making CONNECT request");
       var connectReq = self.request(connectOptions);
       connectReq.useChunkedEncodingByDefault = false;
       connectReq.once("response", onResponse);
@@ -419,7 +419,7 @@ var require_tunnel = __commonJS({
         connectReq.removeAllListeners();
         socket.removeAllListeners();
         if (res.statusCode !== 200) {
-          debug2(
+          debug3(
             "tunneling socket could not be established, statusCode=%d",
             res.statusCode
           );
@@ -431,7 +431,7 @@ var require_tunnel = __commonJS({
           return;
         }
         if (head.length > 0) {
-          debug2("got illegal response body from proxy");
+          debug3("got illegal response body from proxy");
           socket.destroy();
           var error2 = new Error("got illegal response body from proxy");
           error2.code = "ECONNRESET";
@@ -439,13 +439,13 @@ var require_tunnel = __commonJS({
           self.removeSocket(placeholder);
           return;
         }
-        debug2("tunneling connection has established");
+        debug3("tunneling connection has established");
         self.sockets[self.sockets.indexOf(placeholder)] = socket;
         return cb(socket);
       }
       function onError(cause) {
         connectReq.removeAllListeners();
-        debug2(
+        debug3(
           "tunneling socket could not be established, cause=%s\n",
           cause.message,
           cause.stack
@@ -507,9 +507,9 @@ var require_tunnel = __commonJS({
       }
       return target;
     }
-    var debug2;
+    var debug3;
     if (process.env.NODE_DEBUG && /\btunnel\b/.test(process.env.NODE_DEBUG)) {
-      debug2 = function() {
+      debug3 = function() {
         var args = Array.prototype.slice.call(arguments);
         if (typeof args[0] === "string") {
           args[0] = "TUNNEL: " + args[0];
@@ -519,10 +519,10 @@ var require_tunnel = __commonJS({
         console.error.apply(console, args);
       };
     } else {
-      debug2 = function() {
+      debug3 = function() {
       };
     }
-    exports.debug = debug2;
+    exports.debug = debug3;
   }
 });
 
@@ -19733,10 +19733,10 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       return process.env["RUNNER_DEBUG"] === "1";
     }
     exports.isDebug = isDebug;
-    function debug2(message) {
+    function debug3(message) {
       (0, command_1.issueCommand)("debug", {}, message);
     }
-    exports.debug = debug2;
+    exports.debug = debug3;
     function error2(message, properties = {}) {
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
@@ -32783,7 +32783,29 @@ var CopilotClient = class {
 // dist/sdk/copilot-client.js
 var core = __toESM(require_core(), 1);
 var copilotClientInstance = null;
+function hasCopilotAuth() {
+  const copilotToken = process.env.COPILOT_GITHUB_TOKEN;
+  const ghToken = process.env.GH_TOKEN;
+  const githubToken = process.env.GITHUB_TOKEN;
+  if (copilotToken && copilotToken.length > 0) {
+    return true;
+  }
+  if (ghToken && ghToken.length > 0) {
+    return true;
+  }
+  if (githubToken && githubToken.length > 0) {
+    if (githubToken.startsWith("github_pat_") || githubToken.startsWith("gho_") || githubToken.startsWith("ghu_")) {
+      return true;
+    }
+    core.debug("GITHUB_TOKEN appears to be an Actions token without Copilot access");
+  }
+  return false;
+}
 async function isCopilotAvailable() {
+  if (!hasCopilotAuth()) {
+    core.warning("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN with a fine-grained PAT that has Copilot access.");
+    return false;
+  }
   return true;
 }
 async function getCopilotClient() {
@@ -33356,6 +33378,11 @@ function getCommentFromContext() {
   return null;
 }
 async function analyzeIssue(systemPrompt, userPrompt, model, sanitized) {
+  if (!hasCopilotAuth()) {
+    core2.warning("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN secret with a fine-grained PAT that has Copilot access.");
+    core2.warning("Falling back to basic analysis (no AI). See: https://docs.github.com/en/copilot");
+    return createFallbackResult(sanitized);
+  }
   const response = await sendPrompt(systemPrompt, userPrompt, { model });
   if (response.finishReason === "error" || !response.content) {
     core2.warning("Copilot SDK returned an error or empty response, falling back to basic analysis");
@@ -33380,6 +33407,10 @@ async function analyzeIssue(systemPrompt, userPrompt, model, sanitized) {
   };
 }
 async function generateSubIssues(issueTitle, issueBody, summary, model) {
+  if (!hasCopilotAuth()) {
+    core2.warning("Cannot generate sub-issues without Copilot authentication");
+    return [];
+  }
   const prompt = `You are generating GitHub issues from a research report.
 
 ## Research Report Title

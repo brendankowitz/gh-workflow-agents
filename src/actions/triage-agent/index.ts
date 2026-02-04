@@ -37,6 +37,7 @@ import {
   closeIssue,
   createSubIssues,
   stopCopilotClient,
+  hasCopilotAuth,
   type IssueRef,
 } from '../../sdk/index.js';
 
@@ -604,6 +605,13 @@ async function analyzeIssue(
   model: string,
   sanitized: ReturnType<typeof sanitizeIssue>
 ): Promise<TriageResult> {
+  // Check for Copilot authentication before attempting SDK call
+  if (!hasCopilotAuth()) {
+    core.warning('No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN secret with a fine-grained PAT that has Copilot access.');
+    core.warning('Falling back to basic analysis (no AI). See: https://docs.github.com/en/copilot');
+    return createFallbackResult(sanitized);
+  }
+
   // Send prompt to Copilot SDK
   const response = await sendPrompt(systemPrompt, userPrompt, { model });
 
@@ -645,6 +653,12 @@ async function generateSubIssues(
   summary: string,
   model: string
 ): Promise<Array<{ title: string; body: string; labels?: string[] }>> {
+  // Check for Copilot authentication before attempting SDK call
+  if (!hasCopilotAuth()) {
+    core.warning('Cannot generate sub-issues without Copilot authentication');
+    return [];
+  }
+
   const prompt = `You are generating GitHub issues from a research report.
 
 ## Research Report Title

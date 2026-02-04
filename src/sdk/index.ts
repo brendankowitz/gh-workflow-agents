@@ -49,6 +49,8 @@ export {
   createTriageSystemPrompt,
   createReviewSystemPrompt,
   createResearchSystemPrompt,
+  hasCopilotAuth,
+  isCopilotAvailable,
   type SessionConfig,
   type McpServerDefinition,
   type Message,
