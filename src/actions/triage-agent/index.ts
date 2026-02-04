@@ -418,6 +418,37 @@ This will help ensure the issue can be properly addressed.
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map(n => `#${n}`).join(', ')}`);
 
+          // Immediately assign actionable sub-issues to Copilot coding agent
+          for (let i = 0; i < createdIssues.length; i++) {
+            const subIssueNumber = createdIssues[i];
+            const subIssue = subIssuesToCreate[i];
+            if (!subIssue || subIssueNumber === undefined) continue;
+
+            const subRef: IssueRef = { ...ref, issueNumber: subIssueNumber };
+
+            // Check if this is a documentation-only task (keep for humans)
+            const isDocsOnly = subIssue.labels?.every(l => l === 'documentation');
+
+            if (!isDocsOnly) {
+              // Assign to Copilot coding agent
+              const instructions = `
+## Task
+${subIssue.title}
+
+## Details
+${subIssue.body}
+
+## Context
+This issue was created from research report #${issue.number}. Implement according to the details above.
+              `.trim();
+
+              await assignToCodingAgent(octokit, subRef, instructions);
+              core.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
+            } else {
+              core.info(`Sub-issue #${subIssueNumber} is documentation-only, leaving for human`);
+            }
+          }
+
           // Close the parent issue - it's been fully processed
           await closeIssue(
             octokit,

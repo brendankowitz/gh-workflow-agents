@@ -33229,6 +33229,30 @@ ${validated.reasoning}`;
         if (subIssuesToCreate && subIssuesToCreate.length > 0) {
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core2.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map((n) => `#${n}`).join(", ")}`);
+          for (let i = 0; i < createdIssues.length; i++) {
+            const subIssueNumber = createdIssues[i];
+            const subIssue = subIssuesToCreate[i];
+            if (!subIssue || subIssueNumber === void 0)
+              continue;
+            const subRef = { ...ref, issueNumber: subIssueNumber };
+            const isDocsOnly = subIssue.labels?.every((l) => l === "documentation");
+            if (!isDocsOnly) {
+              const instructions2 = `
+## Task
+${subIssue.title}
+
+## Details
+${subIssue.body}
+
+## Context
+This issue was created from research report #${issue.number}. Implement according to the details above.
+              `.trim();
+              await assignToCodingAgent(octokit, subRef, instructions2);
+              core2.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
+            } else {
+              core2.info(`Sub-issue #${subIssueNumber} is documentation-only, leaving for human`);
+            }
+          }
           await closeIssue(octokit, ref, `This research report has been processed and broken down into ${createdIssues.length} actionable sub-issues. Closing as completed.`, "completed");
           core2.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
