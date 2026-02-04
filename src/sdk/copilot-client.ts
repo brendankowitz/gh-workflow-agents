@@ -70,11 +70,8 @@ let copilotClientInstance: GHCopilotClient | null = null;
  * The SDK requires the CLI to be installed locally
  */
 export async function isCopilotAvailable(): Promise<boolean> {
-  // Check for CI environment - Copilot CLI typically not available in CI
-  if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
-    core.info('Running in CI environment - Copilot CLI may not be available');
-    return false;
-  }
+  // Always try to use Copilot - the CLI should be installed
+  // The workflow installs @github/copilot before running
   return true;
 }
 

@@ -32744,10 +32744,6 @@ var CopilotClient = class {
 var core = __toESM(require_core(), 1);
 var copilotClientInstance = null;
 async function isCopilotAvailable() {
-  if (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true") {
-    core.info("Running in CI environment - Copilot CLI may not be available");
-    return false;
-  }
   return true;
 }
 async function getCopilotClient() {

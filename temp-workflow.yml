@@ -1,0 +1,47 @@
+# AI Research Workflow
+# Weekly codebase health monitoring and reporting with AI-powered insights
+#
+# REQUIRED SECRETS:
+# - COPILOT_GITHUB_TOKEN: GitHub PAT with "Copilot Requests: Read" permission
+
+name: AI Research Report
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 9am UTC
+  workflow_dispatch:
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      security-events: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub Copilot CLI
+        run: |
+          npm install -g @github/copilot
+          echo "GitHub Copilot CLI installed at: $(which copilot || echo 'not in path')"
+          copilot --version || echo "CLI installed"
+
+      - name: AI Research
+        uses: brendankowitz/gh-workflow-agents/actions/research-agent@main
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          model: claude-sonnet-4.5
+          output-type: issue
+          focus-areas: 'dependencies,security,technical-debt,industry-research'
+          create-actionable-issues: 'true'
+          min-priority-for-issue: 'high'
