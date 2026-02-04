@@ -349,19 +349,37 @@ Respond with valid JSON only. Do not include any explanatory text outside the JS
 }
 
 /**
- * Parses JSON response from agent, handling markdown code blocks
+ * Parses JSON response from agent, handling various formats
  *
  * @param response - Raw response from agent
  * @returns Parsed JSON object
  */
 export function parseAgentResponse<T>(response: string): T | null {
-  // Try to extract JSON from markdown code blocks
+  // Strategy 1: Try to extract JSON from markdown code blocks
   const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = codeBlockMatch?.[1] ?? response;
+  if (codeBlockMatch?.[1]) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim()) as T;
+    } catch {
+      // Continue to next strategy
+    }
+  }
 
+  // Strategy 2: Find JSON object that starts with { and ends with }
+  const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+  if (jsonObjectMatch) {
+    try {
+      return JSON.parse(jsonObjectMatch[0]) as T;
+    } catch {
+      // Continue to next strategy
+    }
+  }
+
+  // Strategy 3: Try parsing the entire response as-is
   try {
-    return JSON.parse(jsonStr.trim()) as T;
+    return JSON.parse(response.trim()) as T;
   } catch {
+    // All strategies failed
     return null;
   }
 }

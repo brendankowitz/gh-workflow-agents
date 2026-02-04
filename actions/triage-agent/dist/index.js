@@ -32861,9 +32861,21 @@ Respond with valid JSON only. Do not include any explanatory text outside the JS
 }
 function parseAgentResponse(response) {
   const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = codeBlockMatch?.[1] ?? response;
+  if (codeBlockMatch?.[1]) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+    }
+  }
+  const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+  if (jsonObjectMatch) {
+    try {
+      return JSON.parse(jsonObjectMatch[0]);
+    } catch {
+    }
+  }
   try {
-    return JSON.parse(jsonStr.trim());
+    return JSON.parse(response.trim());
   } catch {
     return null;
   }
@@ -33067,7 +33079,7 @@ For each sub-issue, include:
 - Appropriate labels (feature, bug, enhancement, priority:X)
 
 ## Output Format
-After exploring the codebase, respond with valid JSON:
+CRITICAL: After exploring the codebase, respond with ONLY a JSON object. No explanatory text before or after the JSON. Start your response with { and end with }.
 {
   "classification": "bug" | "feature" | "question" | "documentation" | "spam" | "research-report",
   "labels": ["label1", "label2"],

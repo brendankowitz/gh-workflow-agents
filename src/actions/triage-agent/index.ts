@@ -216,7 +216,7 @@ For each sub-issue, include:
 - Appropriate labels (feature, bug, enhancement, priority:X)
 
 ## Output Format
-After exploring the codebase, respond with valid JSON:
+CRITICAL: After exploring the codebase, respond with ONLY a JSON object. No explanatory text before or after the JSON. Start your response with { and end with }.
 {
   "classification": "bug" | "feature" | "question" | "documentation" | "spam" | "research-report",
   "labels": ["label1", "label2"],

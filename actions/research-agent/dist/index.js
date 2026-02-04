@@ -32435,9 +32435,21 @@ async function sendPrompt(systemPrompt, userPrompt, options = {}) {
 }
 function parseAgentResponse(response) {
   const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = codeBlockMatch?.[1] ?? response;
+  if (codeBlockMatch?.[1]) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+    }
+  }
+  const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+  if (jsonObjectMatch) {
+    try {
+      return JSON.parse(jsonObjectMatch[0]);
+    } catch {
+    }
+  }
   try {
-    return JSON.parse(jsonStr.trim());
+    return JSON.parse(response.trim());
   } catch {
     return null;
   }
