@@ -66,11 +66,30 @@ export interface CompletionOptions {
 let copilotClientInstance: GHCopilotClient | null = null;
 
 /**
+ * Checks if the Copilot CLI is available
+ * The SDK requires the CLI to be installed locally
+ */
+export async function isCopilotAvailable(): Promise<boolean> {
+  // Check for CI environment - Copilot CLI typically not available in CI
+  if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+    core.info('Running in CI environment - Copilot CLI may not be available');
+    return false;
+  }
+  return true;
+}
+
+/**
  * Gets or creates the Copilot client instance
  * The Copilot CLI handles authentication automatically
  */
 export async function getCopilotClient(): Promise<GHCopilotClient> {
   if (!copilotClientInstance) {
+    // Check if we're in an environment where the CLI is available
+    const available = await isCopilotAvailable();
+    if (!available) {
+      throw new Error('Copilot CLI not available in this environment. AI-powered insights will use fallback.');
+    }
+
     copilotClientInstance = new GHCopilotClient();
     await copilotClientInstance.start();
     core.info('Copilot SDK client initialized');

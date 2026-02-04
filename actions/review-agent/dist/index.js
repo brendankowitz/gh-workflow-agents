@@ -32666,8 +32666,19 @@ var CopilotClient = class {
 // dist/sdk/copilot-client.js
 var core = __toESM(require_core(), 1);
 var copilotClientInstance = null;
+async function isCopilotAvailable() {
+  if (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true") {
+    core.info("Running in CI environment - Copilot CLI may not be available");
+    return false;
+  }
+  return true;
+}
 async function getCopilotClient() {
   if (!copilotClientInstance) {
+    const available = await isCopilotAvailable();
+    if (!available) {
+      throw new Error("Copilot CLI not available in this environment. AI-powered insights will use fallback.");
+    }
     copilotClientInstance = new CopilotClient();
     await copilotClientInstance.start();
     core.info("Copilot SDK client initialized");
