@@ -42,9 +42,16 @@ export interface RepositoryContext {
   architecture?: string;
 }
 
+/** Sub-issue definition for breaking down complex issues */
+export interface SubIssueDefinition {
+  title: string;
+  body: string;
+  labels?: string[];
+}
+
 /** Issue classification result */
 export interface TriageResult {
-  classification: 'bug' | 'feature' | 'question' | 'documentation' | 'spam';
+  classification: 'bug' | 'feature' | 'question' | 'documentation' | 'spam' | 'research-report';
   labels: string[];
   priority: 'low' | 'medium' | 'high' | 'critical';
   summary: string;
@@ -61,7 +68,13 @@ export interface TriageResult {
   /** How the issue aligns (or conflicts) with vision */
   visionAlignmentReason: string;
   /** Recommended action for this issue */
-  recommendedAction: 'assign-to-agent' | 'request-clarification' | 'close-as-wontfix' | 'close-as-duplicate' | 'human-review';
+  recommendedAction: 'assign-to-agent' | 'request-clarification' | 'close-as-wontfix' | 'close-as-duplicate' | 'human-review' | 'create-sub-issues';
+  /** Sub-issues to create (when recommendedAction is 'create-sub-issues') */
+  subIssues?: SubIssueDefinition[];
+  /** Files examined during codebase exploration */
+  filesExamined?: string[];
+  /** Files that would need modification to implement this issue */
+  filesToModify?: string[];
 }
 
 /** Code review result */
@@ -214,6 +227,9 @@ export const ALLOWED_LABELS = [
   'priority:high',
   'priority:critical',
   'copilot-assigned',
+  'agent-assigned',
+  'has-sub-issues',
+  'triaged',
   'stale',
   'research-report',
 ] as const;

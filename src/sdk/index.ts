@@ -28,6 +28,8 @@ export {
   assignToCodingAgent,
   requestClarification,
   closeIssue,
+  createIssue,
+  createSubIssues,
   type RepoRef,
   type IssueRef,
   type PullRequestRef,

@@ -26,10 +26,15 @@ jobs:
       issues: write
       contents: read
 
-    # Prevent self-triggering loops and respect stop commands
+    # Allow bot-created issues for self-maintaining repos, but with safeguards:
+    # - Skip if issue already has triage labels (prevents re-triage loops)
+    # - Skip dependabot issues (not relevant for feature triage)
+    # - Respect stop commands
     if: |
-      github.actor != 'github-actions[bot]' &&
       github.actor != 'dependabot[bot]' &&
+      !contains(join(github.event.issue.labels.*.name, ','), 'status:triage') &&
+      !contains(join(github.event.issue.labels.*.name, ','), 'triaged') &&
+      !contains(join(github.event.issue.labels.*.name, ','), 'agent-assigned') &&
       !contains(github.event.comment.body || '', '/stop') &&
       !contains(github.event.comment.body || '', '/override') &&
       !contains(github.event.comment.body || '', '/human') &&
@@ -37,10 +42,26 @@ jobs:
       !contains(github.event.comment.body || '', '/cancel')
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub Copilot CLI
+        run: |
+          npm install -g @github/copilot
+          echo "GitHub Copilot CLI installed at: $(which copilot || echo 'not in path')"
+          copilot --version || echo "CLI installed"
+
       - name: AI Triage
         # TODO: Replace with actual commit SHA after first release
         # Example: uses: brendankowitz/gh-workflow-agents/actions/triage-agent@a1b2c3d4e5f6...
         uses: brendankowitz/gh-workflow-agents/actions/triage-agent@main
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}

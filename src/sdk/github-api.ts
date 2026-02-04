@@ -458,3 +458,101 @@ export async function getIssue(
     user: response.data.user?.login || 'unknown',
   };
 }
+
+/**
+ * Creates a new issue
+ *
+ * @param octokit - Authenticated Octokit
+ * @param ref - Repository reference
+ * @param title - Issue title
+ * @param body - Issue body
+ * @param labels - Optional labels to add
+ * @param parentIssue - Optional parent issue number for tracking
+ * @returns Created issue number
+ */
+export async function createIssue(
+  octokit: Octokit,
+  ref: RepoRef,
+  title: string,
+  body: string,
+  labels?: string[],
+  parentIssue?: number
+): Promise<number> {
+  // Add parent reference if provided
+  const fullBody = parentIssue
+    ? `${body}\n\n---\n*Sub-issue of #${parentIssue}*`
+    : body;
+
+  const response = await octokit.rest.issues.create({
+    owner: ref.owner,
+    repo: ref.repo,
+    title,
+    body: fullBody,
+    labels,
+  });
+
+  return response.data.number;
+}
+
+/**
+ * Creates multiple sub-issues from a parent issue
+ *
+ * @param octokit - Authenticated Octokit
+ * @param ref - Issue reference (parent)
+ * @param subIssues - Array of sub-issues to create
+ * @returns Array of created issue numbers
+ */
+export async function createSubIssues(
+  octokit: Octokit,
+  ref: IssueRef,
+  subIssues: Array<{
+    title: string;
+    body: string;
+    labels?: string[];
+  }>
+): Promise<number[]> {
+  const createdIssues: number[] = [];
+
+  for (const subIssue of subIssues) {
+    const issueNumber = await createIssue(
+      octokit,
+      ref,
+      subIssue.title,
+      subIssue.body,
+      subIssue.labels,
+      ref.issueNumber
+    );
+    createdIssues.push(issueNumber);
+  }
+
+  // Update parent issue with links to sub-issues
+  if (createdIssues.length > 0) {
+    const subIssueLinks = createdIssues
+      .map((num, i) => `- [ ] #${num} - ${subIssues[i]?.title ?? 'Sub-issue'}`)
+      .join('\n');
+
+    await octokit.rest.issues.createComment({
+      owner: ref.owner,
+      repo: ref.repo,
+      issue_number: ref.issueNumber,
+      body: `## 📋 Sub-Issues Created
+
+This issue has been broken down into the following actionable items:
+
+${subIssueLinks}
+
+---
+*Each sub-issue will be triaged and assigned independently.*`,
+    });
+
+    // Add label to indicate this issue has been decomposed
+    await octokit.rest.issues.addLabels({
+      owner: ref.owner,
+      repo: ref.repo,
+      issue_number: ref.issueNumber,
+      labels: ['has-sub-issues', 'triaged'],
+    });
+  }
+
+  return createdIssues;
+}

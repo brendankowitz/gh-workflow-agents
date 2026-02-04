@@ -32,6 +32,7 @@ import {
   buildReviewPrompt,
   sendPrompt,
   parseAgentResponse,
+  stopCopilotClient,
   type PullRequestRef,
 } from '../../sdk/index.js';
 
@@ -194,6 +195,15 @@ export async function run(): Promise<void> {
     } else {
       core.setFailed('An unknown error occurred');
     }
+  } finally {
+    // Clean up Copilot SDK client to prevent hanging
+    try {
+      await stopCopilotClient();
+    } catch {
+      // Ignore cleanup errors
+    }
+    // Force exit to prevent hanging handles from SDK
+    setTimeout(() => process.exit(0), 1000);
   }
 }
 
