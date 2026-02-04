@@ -33235,9 +33235,7 @@ ${validated.reasoning}`;
             if (!subIssue || subIssueNumber === void 0)
               continue;
             const subRef = { ...ref, issueNumber: subIssueNumber };
-            const isDocsOnly = subIssue.labels?.every((l) => l === "documentation");
-            if (!isDocsOnly) {
-              const instructions2 = `
+            const instructions2 = `
 ## Task
 ${subIssue.title}
 
@@ -33246,12 +33244,9 @@ ${subIssue.body}
 
 ## Context
 This issue was created from research report #${issue.number}. Implement according to the details above.
-              `.trim();
-              await assignToCodingAgent(octokit, subRef, instructions2);
-              core2.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
-            } else {
-              core2.info(`Sub-issue #${subIssueNumber} is documentation-only, leaving for human`);
-            }
+            `.trim();
+            await assignToCodingAgent(octokit, subRef, instructions2);
+            core2.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
           }
           await closeIssue(octokit, ref, `This research report has been processed and broken down into ${createdIssues.length} actionable sub-issues. Closing as completed.`, "completed");
           core2.info(`Closed parent issue #${issue.number} after creating sub-issues`);
