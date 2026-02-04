@@ -134,10 +134,11 @@ export async function sendPrompt(
       },
     });
 
-    // Send the user prompt and wait for response
+    // Send the user prompt and wait for response with extended timeout for CI
+    const timeoutMs = process.env.GITHUB_ACTIONS ? 300000 : 120000; // 5 min in CI, 2 min locally
     const response = await session.sendAndWait({
       prompt: userPrompt,
-    }, 120000); // 2 minute timeout
+    }, timeoutMs);
 
     // Extract content from response
     const content = response?.data?.content || '';

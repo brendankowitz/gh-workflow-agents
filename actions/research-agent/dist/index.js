@@ -32413,9 +32413,10 @@ async function sendPrompt(systemPrompt, userPrompt, options = {}) {
         content: systemPrompt
       }
     });
+    const timeoutMs = process.env.GITHUB_ACTIONS ? 3e5 : 12e4;
     const response = await session.sendAndWait({
       prompt: userPrompt
-    }, 12e4);
+    }, timeoutMs);
     const content = response?.data?.content || "";
     const finishReason = response ? "stop" : "error";
     core.info(`Copilot SDK response received (finish_reason: ${finishReason})`);
