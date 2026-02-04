@@ -406,23 +406,32 @@ This will help ensure the issue can be properly addressed.
 
       case 'create-sub-issues':
         // Issue needs to be broken into sub-issues
-        if (validated.subIssues && validated.subIssues.length > 0) {
-          const createdIssues = await createSubIssues(octokit, ref, validated.subIssues);
+        let subIssuesToCreate = validated.subIssues;
+
+        // If no subIssues provided, make a focused API call to generate them
+        if (!subIssuesToCreate || subIssuesToCreate.length === 0) {
+          core.info('No subIssues provided, making focused API call to generate them...');
+          subIssuesToCreate = await generateSubIssues(issue.title, issue.body, validated.summary, config.model);
+        }
+
+        if (subIssuesToCreate && subIssuesToCreate.length > 0) {
+          const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map(n => `#${n}`).join(', ')}`);
         } else {
-          core.warning(`Recommended action was create-sub-issues but no subIssues were provided`);
-          // Fall through to human review
+          core.warning(`Unable to generate sub-issues for research report`);
           await createComment(octokit, ref, `## 🤖 AI Triage Summary
 
 **Classification:** ${validated.classification}
 **Summary:** ${validated.summary}
 
-This issue appears to contain multiple actionable items but I was unable to break them down automatically.
+This research report contains actionable recommendations but I was unable to break them down into sub-issues automatically.
 
-**Please manually review and create focused sub-issues for each actionable item.**
+**Analysis:** ${validated.reasoning}
+
+**Please manually review and create focused sub-issues for each actionable recommendation.**
 
 ---
-*Flagged for human review by GH-Agency Triage Agent*`);
+*Flagged for manual breakdown by GH-Agency Triage Agent*`);
         }
         break;
 
@@ -566,6 +575,81 @@ async function analyzeIssue(
     // Force human review if sanitization detected suspicious content
     needsHumanReview: parsed.needsHumanReview || sanitized.hasSuspiciousContent,
   };
+}
+
+/**
+ * Generates sub-issues from a research report using a focused API call
+ */
+async function generateSubIssues(
+  issueTitle: string,
+  issueBody: string,
+  summary: string,
+  model: string
+): Promise<Array<{ title: string; body: string; labels?: string[] }>> {
+  const prompt = `You are generating GitHub issues from a research report.
+
+## Research Report Title
+${issueTitle}
+
+## Research Report Content
+${issueBody}
+
+## Summary
+${summary}
+
+## Task
+Extract each actionable recommendation from this research report and create a focused GitHub issue for it.
+
+CRITICAL: Respond with ONLY a JSON array. No explanatory text. Start with [ and end with ].
+
+Each issue should have:
+- A clear, specific title (imperative form, e.g., "Add USCDI v4 configuration template")
+- A detailed body with:
+  - What needs to be done
+  - Why it's valuable (from the research)
+  - Suggested implementation approach
+- Appropriate labels from: feature, enhancement, documentation, security, performance
+
+Example output format:
+[
+  {
+    "title": "Add USCDI v4 configuration template",
+    "body": "## Summary\\nCreate configuration template for USCDI v4 data elements...\\n\\n## Background\\nFrom research: USCDI is expanding...\\n\\n## Suggested Approach\\n1. Create src/config/uscdi-v4.json\\n2. Add validation...",
+    "labels": ["feature", "enhancement"]
+  }
+]
+
+Generate issues ONLY for recommendations that are clearly actionable. Skip vague or informational items.`;
+
+  try {
+    const response = await sendPrompt(
+      'You generate GitHub issues from research reports. Output ONLY valid JSON arrays.',
+      prompt,
+      { model }
+    );
+
+    if (response.finishReason === 'error' || !response.content) {
+      core.warning('Failed to generate sub-issues: empty response');
+      return [];
+    }
+
+    // Try to parse the response as JSON array
+    const content = response.content.trim();
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      const parsed = JSON.parse(arrayMatch[0]);
+      if (Array.isArray(parsed)) {
+        core.info(`Generated ${parsed.length} sub-issues from research report`);
+        return parsed;
+      }
+    }
+
+    core.warning('Failed to parse sub-issues response as JSON array');
+    return [];
+  } catch (error) {
+    core.warning(`Error generating sub-issues: ${error instanceof Error ? error.message : String(error)}`);
+    return [];
+  }
 }
 
 /**
