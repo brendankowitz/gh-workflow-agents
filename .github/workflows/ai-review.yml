@@ -10,11 +10,17 @@
 name: AI Code Review
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
 
 # Prevent duplicate runs
 concurrency:
-  group: ai-review-${{ github.event.pull_request.number }}
+  group: ai-review-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
@@ -24,12 +30,15 @@ jobs:
       pull-requests: write
       contents: read
 
-    # Skip bot PRs to prevent loops
+    # Skip bot PRs to prevent loops (except Copilot - we want to review those!)
+    # Always run for workflow_dispatch (manual trigger)
     if: |
-      github.actor != 'github-actions[bot]' &&
-      !contains(github.event.pull_request.body || '', '/stop') &&
-      !contains(github.event.pull_request.body || '', '/override') &&
-      !contains(github.event.pull_request.body || '', '/human')
+      github.event_name == 'workflow_dispatch' || (
+        (github.actor != 'github-actions[bot]' || github.actor == 'copilot-swe-agent[bot]') &&
+        !contains(github.event.pull_request.body || '', '/stop') &&
+        !contains(github.event.pull_request.body || '', '/override') &&
+        !contains(github.event.pull_request.body || '', '/human')
+      )
 
     steps:
       - name: Checkout
@@ -55,6 +64,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          pr-number: ${{ github.event.inputs.pr_number || '' }}
           model: claude-sonnet-4.5
           auto-approve-dependabot: 'true'
           security-focus: 'true'

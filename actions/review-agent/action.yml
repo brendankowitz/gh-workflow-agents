@@ -17,6 +17,9 @@ inputs:
   copilot-token:
     description: 'GitHub PAT with Copilot Requests permission (falls back to COPILOT_GITHUB_TOKEN env var)'
     required: false
+  pr-number:
+    description: 'PR number to review (for workflow_dispatch, overrides event context)'
+    required: false
   model:
     description: 'AI model to use for review'
     required: false

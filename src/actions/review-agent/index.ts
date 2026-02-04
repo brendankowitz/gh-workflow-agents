@@ -33,6 +33,7 @@ import {
   sendPrompt,
   parseAgentResponse,
   stopCopilotClient,
+  hasCopilotAuth,
   type PullRequestRef,
 } from '../../sdk/index.js';
 
@@ -52,21 +53,28 @@ export async function run(): Promise<void> {
   try {
     const config = getConfig();
 
-    // Check for bot actors
+    // Check for bot actors (but allow Copilot PRs - we want to review those!)
     const actor = github.context.actor;
-    if (isBot(actor)) {
+    const isCopilotActor = actor.toLowerCase() === 'copilot-swe-agent';
+    if (isBot(actor) && !isCopilotActor) {
       core.info(`Skipping review for bot actor: ${actor}`);
       return;
+    }
+    if (isCopilotActor) {
+      core.info(`Reviewing Copilot-generated PR from: ${actor}`);
     }
 
     // Initialize circuit breaker
     const circuitBreaker = createCircuitBreakerContext();
     checkCircuitBreaker(circuitBreaker);
 
-    // Get PR data
-    const pr = getPRFromContext();
+    // Create octokit early (needed for workflow_dispatch PR fetch)
+    const octokit = createOctokit(config.githubToken);
+
+    // Get PR data (may fetch via API for workflow_dispatch)
+    const pr = await getPRFromContext(octokit);
     if (!pr) {
-      core.setFailed('No pull request found in event context');
+      core.setFailed('No pull request found in event context. For workflow_dispatch, ensure pr-number input is provided.');
       return;
     }
 
@@ -76,7 +84,6 @@ export async function run(): Promise<void> {
       return;
     }
 
-    const octokit = createOctokit(config.githubToken);
     const ref: PullRequestRef = {
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
@@ -227,11 +234,38 @@ function getConfig(): ReviewConfig {
 }
 
 /**
- * Extracts PR data from context
+ * Extracts PR data from context or fetches from API for workflow_dispatch
  */
-function getPRFromContext(): { number: number; title: string; body: string } | null {
+async function getPRFromContext(
+  octokit?: ReturnType<typeof createOctokit>
+): Promise<{ number: number; title: string; body: string } | null> {
   const payload = github.context.payload;
 
+  // Check for workflow_dispatch with pr-number input
+  const prNumberInput = core.getInput('pr-number');
+  if (prNumberInput && octokit) {
+    const prNumber = parseInt(prNumberInput, 10);
+    if (!isNaN(prNumber)) {
+      core.info(`Fetching PR #${prNumber} via API (workflow_dispatch)`);
+      try {
+        const response = await octokit.rest.pulls.get({
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          pull_number: prNumber,
+        });
+        return {
+          number: response.data.number,
+          title: response.data.title || '',
+          body: response.data.body || '',
+        };
+      } catch (error) {
+        core.error(`Failed to fetch PR #${prNumber}: ${error}`);
+        return null;
+      }
+    }
+  }
+
+  // Standard pull_request event
   if (payload.pull_request) {
     return {
       number: payload.pull_request.number,
@@ -299,6 +333,13 @@ async function analyzePR(
   repo: string,
   model: string
 ): Promise<ReviewResult> {
+  // Check for Copilot auth early to fail fast
+  if (!hasCopilotAuth()) {
+    core.warning('No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN with a fine-grained PAT that has Copilot access.');
+    core.warning('Falling back to basic pattern-based analysis (no AI)...');
+    return createFallbackReviewResult(diff, files);
+  }
+
   // Build the system prompt
   const systemPrompt = createReviewSystemPrompt()
     .replace('{project_name}', `${owner}/${repo}`)
