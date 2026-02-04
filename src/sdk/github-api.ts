@@ -311,7 +311,7 @@ export function createAuditEntry(
 
 /**
  * Assigns a Copilot coding agent to work on an issue
- * This creates a repository dispatch event that can trigger a Copilot workflow
+ * Triggers Copilot by mentioning @github-copilot in a comment
  *
  * @param octokit - Authenticated Octokit
  * @param ref - Issue reference
@@ -330,31 +330,23 @@ export async function assignToCodingAgent(
     labels: ['copilot-assigned', 'status:in-progress'],
   });
 
-  // Post comment indicating assignment
+  // Post comment mentioning @github-copilot to trigger the coding agent
+  // This is the standard way to invoke Copilot to work on an issue
   await octokit.rest.issues.createComment({
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `## 🤖 Assigned to Copilot Coding Agent
+    body: `@github-copilot please implement this issue.
+
+## Assignment Details
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 
-**Assignment Instructions:**
+**Instructions:**
 ${instructions}
 
 ---
-*The Copilot coding agent will create a pull request to address this issue.*`,
-  });
-
-  // Dispatch event to trigger Copilot workflow
-  await octokit.rest.repos.createDispatchEvent({
-    owner: ref.owner,
-    repo: ref.repo,
-    event_type: 'copilot-issue-assigned',
-    client_payload: {
-      issue_number: ref.issueNumber,
-      instructions,
-    },
+*Copilot will create a pull request to address this issue.*`,
   });
 }
 
