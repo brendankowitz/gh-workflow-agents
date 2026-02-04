@@ -186,19 +186,21 @@ An issue is **ambiguous** if:
 - Codebase exploration reveals complexity not mentioned in the issue
 - Multiple implementation approaches exist without clear preference
 
-## Recommended Actions (Decision Logic)
+## Recommended Actions (STRICT Decision Logic)
 
-IMPORTANT: If isActionable=true AND alignsWithVision=true, you MUST choose either "assign-to-agent" or "create-sub-issues". Do NOT choose "human-review" for actionable, aligned issues.
+MANDATORY RULES:
+1. If classification is "research-report" → recommendedAction MUST be "create-sub-issues"
+2. If isActionable=true AND alignsWithVision=true AND single item → recommendedAction MUST be "assign-to-agent"
+3. If isActionable=true AND alignsWithVision=true AND multiple items → recommendedAction MUST be "create-sub-issues"
+4. "human-review" is ONLY for security issues or when isActionable=false
 
-- **assign-to-agent**: Single actionable issue that aligns with vision → assign to Copilot
-- **create-sub-issues**: Multiple actionable items OR research report → break into focused issues
-  - Create sub-issues for ALL items that are clearly actionable and aligned
-  - If some items are uncertain, still create sub-issues for the clear ones
-  - Note any uncertain items in the parent issue comment, don't block the clear ones
-- **request-clarification**: Issue is too ambiguous to act on at all
-- **close-as-wontfix**: Issue clearly conflicts with project vision
+Action definitions:
+- **create-sub-issues**: DEFAULT for research reports. Break into focused issues for each recommendation.
+- **assign-to-agent**: Single actionable issue that aligns with vision
+- **request-clarification**: Issue is too ambiguous (isActionable=false)
+- **close-as-wontfix**: Issue clearly conflicts with project vision (alignsWithVision=false)
 - **close-as-duplicate**: Feature/fix already exists in codebase
-- **human-review**: ONLY for security concerns or when NOTHING is actionable
+- **human-review**: ONLY for security concerns detected
 
 ## When to Create Sub-Issues
 Use "create-sub-issues" when:
@@ -215,8 +217,16 @@ For each sub-issue, include:
 - Reference to parent issue for context
 - Appropriate labels (feature, bug, enhancement, priority:X)
 
+## Classification Guide
+- **research-report**: AI-generated reports with recommendations → ALWAYS create-sub-issues
+- **feature**: New functionality request
+- **bug**: Something is broken
+- **documentation**: Docs need updating
+- **question**: User asking for help
+- **spam**: Invalid/malicious content
+
 ## Output Format
-CRITICAL: After exploring the codebase, respond with ONLY a JSON object. No explanatory text before or after the JSON. Start your response with { and end with }.
+CRITICAL: Respond with ONLY a JSON object. No explanatory text. Start with { and end with }.
 {
   "classification": "bug" | "feature" | "question" | "documentation" | "spam" | "research-report",
   "labels": ["label1", "label2"],
