@@ -311,7 +311,7 @@ export function createAuditEntry(
 
 /**
  * Assigns a Copilot coding agent to work on an issue
- * Triggers Copilot by mentioning @github-copilot in a comment
+ * Triggers Copilot by assigning the issue to "Copilot" user
  *
  * @param octokit - Authenticated Octokit
  * @param ref - Issue reference
@@ -330,15 +330,32 @@ export async function assignToCodingAgent(
     labels: ['copilot-assigned', 'status:in-progress'],
   });
 
-  // Post comment mentioning @github-copilot to trigger the coding agent
-  // This is the standard way to invoke Copilot to work on an issue
+  // Assign the issue to Copilot - this triggers the coding agent
+  // See: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent
+  try {
+    await octokit.rest.issues.addAssignees({
+      owner: ref.owner,
+      repo: ref.repo,
+      issue_number: ref.issueNumber,
+      assignees: ['Copilot'],
+    });
+  } catch (error) {
+    // Copilot assignment may fail if not enabled for repo
+    // Fall back to @copilot mention which works in some contexts
+    await octokit.rest.issues.createComment({
+      owner: ref.owner,
+      repo: ref.repo,
+      issue_number: ref.issueNumber,
+      body: `@copilot please implement this issue.`,
+    });
+  }
+
+  // Post comment with implementation details for Copilot
   await octokit.rest.issues.createComment({
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `@github-copilot please implement this issue.
-
-## Assignment Details
+    body: `## 🤖 Assigned to Copilot Coding Agent
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 

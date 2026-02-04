@@ -31285,13 +31285,26 @@ async function assignToCodingAgent(octokit, ref, instructions) {
     issue_number: ref.issueNumber,
     labels: ["copilot-assigned", "status:in-progress"]
   });
+  try {
+    await octokit.rest.issues.addAssignees({
+      owner: ref.owner,
+      repo: ref.repo,
+      issue_number: ref.issueNumber,
+      assignees: ["Copilot"]
+    });
+  } catch (error2) {
+    await octokit.rest.issues.createComment({
+      owner: ref.owner,
+      repo: ref.repo,
+      issue_number: ref.issueNumber,
+      body: `@copilot please implement this issue.`
+    });
+  }
   await octokit.rest.issues.createComment({
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `@github-copilot please implement this issue.
-
-## Assignment Details
+    body: `## \u{1F916} Assigned to Copilot Coding Agent
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 
