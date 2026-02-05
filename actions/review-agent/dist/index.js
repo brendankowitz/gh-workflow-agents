@@ -32722,7 +32722,7 @@ async function sendPrompt(systemPrompt, userPrompt, options = {}) {
         content: systemPrompt
       }
     });
-    const timeoutMs = process.env.GITHUB_ACTIONS ? 3e5 : 12e4;
+    const timeoutMs = process.env.GITHUB_ACTIONS ? 36e5 : 3e5;
     const response = await session.sendAndWait({
       prompt: userPrompt
     }, timeoutMs);

@@ -31107,7 +31107,9 @@ async function removeLabels(octokit, ref, labels) {
         name: label
       });
     } catch (error3) {
-      if (error3 instanceof Error && !error3.message.includes("404")) {
+      const msg = error3 instanceof Error ? error3.message.toLowerCase() : "";
+      const isNotFound = msg.includes("404") || msg.includes("not found") || msg.includes("does not exist");
+      if (!isNotFound) {
         throw error3;
       }
     }
@@ -32574,7 +32576,7 @@ async function sendPrompt(systemPrompt, userPrompt, options = {}) {
         content: systemPrompt
       }
     });
-    const timeoutMs = process.env.GITHUB_ACTIONS ? 3e5 : 12e4;
+    const timeoutMs = process.env.GITHUB_ACTIONS ? 36e5 : 3e5;
     const response = await session.sendAndWait({
       prompt: userPrompt
     }, timeoutMs);
@@ -32734,18 +32736,42 @@ If you still need changes, please:
       core2.setOutput("plan", JSON.stringify(plan));
       return;
     }
-    core2.info("Phase 2: Executing REPL loop...");
-    const changes = await executeREPLLoop(plan, config.maxIterations, contextSection, config.model);
-    core2.info(`Generated changes for ${changes.files.length} files`);
-    core2.info("Phase 3: Self-reviewing changes...");
-    const review = await selfReview(changes, contextSection, config.model);
-    if (!review.passed) {
-      core2.warning("Self-review found issues:");
+    const maxRetries = 2;
+    let changes = null;
+    let reviewPassed = false;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      core2.info(`Phase 2 (attempt ${attempt}/${maxRetries}): Executing REPL loop...`);
+      changes = await executeREPLLoop(plan, config.maxIterations, contextSection, config.model);
+      core2.info(`Generated changes for ${changes.files.length} files`);
+      if (changes.files.length === 0) {
+        core2.warning(`Attempt ${attempt}: No files generated, will retry...`);
+        if (attempt < maxRetries) {
+          continue;
+        }
+        core2.setFailed("Failed to generate any code changes after all retries.");
+        return;
+      }
+      core2.info(`Phase 3 (attempt ${attempt}/${maxRetries}): Self-reviewing changes...`);
+      const review = await selfReview(changes, contextSection, config.model);
+      if (review.passed) {
+        core2.info("Self-review passed");
+        reviewPassed = true;
+        break;
+      }
+      core2.warning(`Self-review found issues (attempt ${attempt}/${maxRetries}):`);
       review.issues.forEach((issue) => core2.warning(`  - ${issue}`));
-      core2.setFailed("Self-review failed. Changes need improvement.");
+      if (attempt < maxRetries) {
+        core2.info("Retrying code generation to address issues...");
+        plan.approach += `
+
+PREVIOUS ATTEMPT ISSUES TO FIX:
+${review.issues.join("\n")}`;
+      }
+    }
+    if (!reviewPassed || !changes) {
+      core2.setFailed("Self-review failed after all retries. Changes need manual improvement.");
       return;
     }
-    core2.info("Self-review passed");
     core2.info("Phase 4: Committing and pushing changes...");
     const commitResult = await commitAndPush(changes, task, config);
     core2.info(`Committed to branch: ${commitResult.branchName}`);
