@@ -481,16 +481,26 @@ function createFallbackReviewResult(
 
 /**
  * Maps assessment to GitHub review event
+ * Uses actual issue severity to decide, not just the AI's assessment
  */
 function mapAssessmentToEvent(result: ReviewResult): 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' {
-  switch (result.overallAssessment) {
-    case 'approve':
-      return 'APPROVE';
-    case 'request-changes':
-      return 'REQUEST_CHANGES';
-    default:
-      return 'COMMENT';
+  // Count issues by severity
+  const criticalCount = result.securityIssues.filter(i => i.severity === 'critical').length;
+  const highCount = result.securityIssues.filter(i => i.severity === 'high').length;
+
+  // If there are critical or high severity issues, REQUEST_CHANGES
+  if (criticalCount > 0 || highCount > 0) {
+    return 'REQUEST_CHANGES';
   }
+
+  // If AI explicitly requested changes but no critical/high issues, still request changes
+  if (result.overallAssessment === 'request-changes') {
+    return 'REQUEST_CHANGES';
+  }
+
+  // No blocking issues - APPROVE (even if AI said 'comment')
+  // This covers "APPROVE with suggestions" case
+  return 'APPROVE';
 }
 
 /**

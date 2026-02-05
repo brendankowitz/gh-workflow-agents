@@ -33121,14 +33121,15 @@ function createFallbackReviewResult(diff, files) {
   };
 }
 function mapAssessmentToEvent(result) {
-  switch (result.overallAssessment) {
-    case "approve":
-      return "APPROVE";
-    case "request-changes":
-      return "REQUEST_CHANGES";
-    default:
-      return "COMMENT";
+  const criticalCount = result.securityIssues.filter((i) => i.severity === "critical").length;
+  const highCount = result.securityIssues.filter((i) => i.severity === "high").length;
+  if (criticalCount > 0 || highCount > 0) {
+    return "REQUEST_CHANGES";
   }
+  if (result.overallAssessment === "request-changes") {
+    return "REQUEST_CHANGES";
+  }
+  return "APPROVE";
 }
 function buildReviewComment(result) {
   const sections = ["## \u{1F916} AI Code Review\n"];
