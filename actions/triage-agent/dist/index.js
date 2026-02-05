@@ -33225,32 +33225,34 @@ This issue has been assessed as concrete and actionable. Please implement a solu
         break;
       case "request-clarification":
         const clarificationQuestions = `
-Based on the issue description, the following information would help clarify the requirements:
+Thanks for bringing this up! I'd love to help, but I need a bit more information to understand what you're looking for.
 
-**${validated.actionabilityReason}**
+${validated.actionabilityReason}
 
-Please provide:
-1. More specific details about the expected behavior
-2. Steps to reproduce (if applicable)
-3. Any relevant context or constraints
+Could you help clarify:
+- What specific behavior are you expecting?
+- If this is a bug, what steps lead to the issue?
+- Any other context that might help?
 
-This will help ensure the issue can be properly addressed.
+Once I have a clearer picture, I can get this moving forward.
         `.trim();
         await requestClarification(octokit, ref, clarificationQuestions);
         core3.info(`Requested clarification on issue #${issue.number}`);
         break;
       case "close-as-wontfix":
-        await closeIssue(octokit, ref, `This issue has been closed as it doesn't align with the current project goals.
+        await closeIssue(octokit, ref, `Thanks for the suggestion! After reviewing this against the project's current direction, I don't think this is something we'll be pursuing right now.
 
-**Reason:** ${validated.visionAlignmentReason}`, "not_planned");
+${validated.visionAlignmentReason}
+
+Feel free to open a new issue if you think there's a different angle worth exploring.`, "not_planned");
         core3.info(`Closed issue #${issue.number} as won't fix (vision misalignment)`);
         break;
       case "close-as-duplicate":
-        const duplicateMsg = validated.duplicateOf ? `This issue appears to be a duplicate of #${validated.duplicateOf}.
+        const duplicateMsg = validated.duplicateOf ? `Thanks for raising this! It looks like this is already being tracked in #${validated.duplicateOf}, so I'm going to close this one to keep the discussion in one place. Feel free to add any additional thoughts over there!` : `Thanks for this! After looking around, I found this is already being discussed elsewhere.
 
-Please follow the existing issue for updates.` : `This issue appears to be a duplicate of an existing issue.
+${validated.reasoning}
 
-${validated.reasoning}`;
+Closing this to consolidate the conversation.`;
         await closeIssue(octokit, ref, duplicateMsg, "not_planned");
         core3.info(`Closed issue #${issue.number} as duplicate`);
         break;
@@ -33282,50 +33284,36 @@ This issue was created from research report #${issue.number}. Implement accordin
             await assignToCodingAgent(octokit, subRef, instructions2);
             core3.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
           }
-          await closeIssue(octokit, ref, `This research report has been processed and broken down into ${createdIssues.length} actionable sub-issues. Closing as completed.`, "completed");
+          await closeIssue(octokit, ref, `Great research! I've broken this down into ${createdIssues.length} focused issues (${createdIssues.map((n) => `#${n}`).join(", ")}) and assigned them for implementation. Closing this one since all the actionable items are now being tracked separately.`, "completed");
           core3.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
           core3.warning(`Unable to generate sub-issues for research report`);
-          await createComment(octokit, ref, `## \u2728 AI Triage Summary
+          await createComment(octokit, ref, `Thanks for this research report! I can see there are some good actionable recommendations here.
 
-**Classification:** ${validated.classification}
-**Summary:** ${validated.summary}
+${validated.summary}
 
-This research report contains actionable recommendations but I was unable to break them down into sub-issues automatically.
+${validated.reasoning}
 
-**Analysis:** ${validated.reasoning}
-
-**Please manually review and create focused sub-issues for each actionable recommendation.**
-
----
-*Flagged for manual breakdown by GH-Agency Triage Agent*`);
+I tried to break this down into separate issues for each recommendation, but ran into some trouble doing that automatically. Could a maintainer take a look and create focused issues for each actionable item? That'll help us track and implement them properly.`);
         }
         break;
       case "human-review":
       default:
-        const comment2 = `## \u2728 AI Triage Summary
+        const actionableText = validated.isActionable ? "This looks actionable" : "I'm not quite sure this is ready to work on yet";
+        const visionText = validated.alignsWithVision ? "and fits well with the project's direction" : "though it may not align with the current project goals";
+        const comment2 = `Thanks for opening this issue! I've taken a look and here's my assessment.
 
-**Classification:** ${validated.classification}
-**Priority:** ${validated.priority}
-**Actionable:** ${validated.isActionable ? "Yes" : "No"}
-**Aligns with Vision:** ${validated.alignsWithVision ? "Yes" : "No"}
+**${validated.summary}**
 
-### Summary
-${validated.summary}
-
-### Analysis
 ${validated.reasoning}
 
-### Actionability Assessment
-${validated.actionabilityReason}
+${actionableText} ${visionText}. ${validated.actionabilityReason}
 
-### Vision Alignment
 ${validated.visionAlignmentReason}
 
----
-*This issue requires human review before proceeding.*
+I've flagged this as **${validated.classification}** with **${validated.priority}** priority. A maintainer will review this soon to decide on next steps.
 ${validated.injectionFlagsDetected.length > 0 ? `
-\u26A0\uFE0F **Security flags detected:** ${validated.injectionFlagsDetected.join(", ")}` : ""}`;
+\u26A0\uFE0F *Note: Some content in this issue was flagged for review: ${validated.injectionFlagsDetected.join(", ")}*` : ""}`;
         await createComment(octokit, ref, comment2);
         core3.info(`Issue #${issue.number} flagged for human review`);
         break;
