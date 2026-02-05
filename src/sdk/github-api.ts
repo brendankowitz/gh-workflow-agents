@@ -255,37 +255,48 @@ export async function createPullRequestReview(
     commit_id = pr.data.head.sha;
   }
 
-  try {
-    await octokit.rest.pulls.createReview({
-      owner: ref.owner,
-      repo: ref.repo,
-      pull_number: ref.pullNumber,
-      commit_id,
-      event,
-      body,
-      comments,
-    });
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message.toLowerCase() : '';
-
-    // Handle "Can not approve your own pull request" - retry as COMMENT
-    // This happens when the bot created the PR and tries to approve it
-    if (event === 'APPROVE' && errorMsg.includes('approve your own')) {
-      console.log('Cannot approve own PR, retrying as COMMENT...');
+  // Helper to post review with self-approval fallback
+  const postReview = async (
+    reviewEvent: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT',
+    reviewBody: string,
+    reviewComments?: Array<{ path: string; line: number; body: string }>
+  ) => {
+    try {
       await octokit.rest.pulls.createReview({
         owner: ref.owner,
         repo: ref.repo,
         pull_number: ref.pullNumber,
         commit_id,
-        event: 'COMMENT',
-        body: body + '\n\n*Note: Auto-approval not possible for bot-created PRs.*',
-        comments,
+        event: reviewEvent,
+        body: reviewBody,
+        comments: reviewComments,
       });
-      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      // If can't approve own PR, fall back to COMMENT
+      if (reviewEvent === 'APPROVE' && msg.includes('approve your own')) {
+        console.log('Cannot approve own PR, posting as COMMENT instead...');
+        await octokit.rest.pulls.createReview({
+          owner: ref.owner,
+          repo: ref.repo,
+          pull_number: ref.pullNumber,
+          commit_id,
+          event: 'COMMENT',
+          body: reviewBody + '\n\n*Note: Auto-approval not possible for bot-created PRs.*',
+          comments: reviewComments,
+        });
+        return;
+      }
+      throw err;
     }
+  };
+
+  try {
+    await postReview(event, body, comments);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message.toLowerCase() : '';
 
     // If inline comments fail (e.g., "Line could not be resolved"), retry without them
-    // This happens when AI suggests line numbers not in the diff
     const isLineError = errorMsg.includes('line') || errorMsg.includes('could not be resolved');
 
     if (comments && comments.length > 0 && isLineError) {
@@ -293,23 +304,13 @@ export async function createPullRequestReview(
 
       // Add failed inline comments to the body instead
       let updatedBody = body;
-      if (comments.length > 0) {
-        updatedBody += '\n\n---\n\n**Inline Comments** (could not attach to specific lines):\n\n';
-        for (const comment of comments) {
-          updatedBody += `**${comment.path}** (line ${comment.line}):\n${comment.body}\n\n`;
-        }
+      updatedBody += '\n\n---\n\n**Inline Comments** (could not attach to specific lines):\n\n';
+      for (const comment of comments) {
+        updatedBody += `**${comment.path}** (line ${comment.line}):\n${comment.body}\n\n`;
       }
 
-      // Retry without inline comments
-      await octokit.rest.pulls.createReview({
-        owner: ref.owner,
-        repo: ref.repo,
-        pull_number: ref.pullNumber,
-        commit_id,
-        event,
-        body: updatedBody,
-        // No comments this time
-      });
+      // Retry without inline comments (postReview handles self-approval fallback)
+      await postReview(event, updatedBody);
       return;
     }
 

@@ -31241,53 +31241,51 @@ async function createPullRequestReview(octokit, ref, event, body, comments, comm
     });
     commit_id = pr.data.head.sha;
   }
-  try {
-    await octokit.rest.pulls.createReview({
-      owner: ref.owner,
-      repo: ref.repo,
-      pull_number: ref.pullNumber,
-      commit_id,
-      event,
-      body,
-      comments
-    });
-  } catch (error3) {
-    const errorMsg = error3 instanceof Error ? error3.message.toLowerCase() : "";
-    if (event === "APPROVE" && errorMsg.includes("approve your own")) {
-      console.log("Cannot approve own PR, retrying as COMMENT...");
+  const postReview = async (reviewEvent, reviewBody, reviewComments) => {
+    try {
       await octokit.rest.pulls.createReview({
         owner: ref.owner,
         repo: ref.repo,
         pull_number: ref.pullNumber,
         commit_id,
-        event: "COMMENT",
-        body: body + "\n\n*Note: Auto-approval not possible for bot-created PRs.*",
-        comments
+        event: reviewEvent,
+        body: reviewBody,
+        comments: reviewComments
       });
-      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.toLowerCase() : "";
+      if (reviewEvent === "APPROVE" && msg.includes("approve your own")) {
+        console.log("Cannot approve own PR, posting as COMMENT instead...");
+        await octokit.rest.pulls.createReview({
+          owner: ref.owner,
+          repo: ref.repo,
+          pull_number: ref.pullNumber,
+          commit_id,
+          event: "COMMENT",
+          body: reviewBody + "\n\n*Note: Auto-approval not possible for bot-created PRs.*",
+          comments: reviewComments
+        });
+        return;
+      }
+      throw err;
     }
+  };
+  try {
+    await postReview(event, body, comments);
+  } catch (error3) {
+    const errorMsg = error3 instanceof Error ? error3.message.toLowerCase() : "";
     const isLineError = errorMsg.includes("line") || errorMsg.includes("could not be resolved");
     if (comments && comments.length > 0 && isLineError) {
       console.log("Inline comments failed, retrying without them and adding to body...");
       let updatedBody = body;
-      if (comments.length > 0) {
-        updatedBody += "\n\n---\n\n**Inline Comments** (could not attach to specific lines):\n\n";
-        for (const comment of comments) {
-          updatedBody += `**${comment.path}** (line ${comment.line}):
+      updatedBody += "\n\n---\n\n**Inline Comments** (could not attach to specific lines):\n\n";
+      for (const comment of comments) {
+        updatedBody += `**${comment.path}** (line ${comment.line}):
 ${comment.body}
 
 `;
-        }
       }
-      await octokit.rest.pulls.createReview({
-        owner: ref.owner,
-        repo: ref.repo,
-        pull_number: ref.pullNumber,
-        commit_id,
-        event,
-        body: updatedBody
-        // No comments this time
-      });
+      await postReview(event, updatedBody);
       return;
     }
     throw error3;
