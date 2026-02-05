@@ -255,15 +255,50 @@ export async function createPullRequestReview(
     commit_id = pr.data.head.sha;
   }
 
-  await octokit.rest.pulls.createReview({
-    owner: ref.owner,
-    repo: ref.repo,
-    pull_number: ref.pullNumber,
-    commit_id,
-    event,
-    body,
-    comments,
-  });
+  try {
+    await octokit.rest.pulls.createReview({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber,
+      commit_id,
+      event,
+      body,
+      comments,
+    });
+  } catch (error) {
+    // If inline comments fail (e.g., "Line could not be resolved"), retry without them
+    // This happens when AI suggests line numbers not in the diff
+    const errorMsg = error instanceof Error ? error.message.toLowerCase() : '';
+    const isLineError = errorMsg.includes('line') || errorMsg.includes('could not be resolved');
+
+    if (comments && comments.length > 0 && isLineError) {
+      console.log('Inline comments failed, retrying without them and adding to body...');
+
+      // Add failed inline comments to the body instead
+      let updatedBody = body;
+      if (comments.length > 0) {
+        updatedBody += '\n\n---\n\n**Inline Comments** (could not attach to specific lines):\n\n';
+        for (const comment of comments) {
+          updatedBody += `**${comment.path}** (line ${comment.line}):\n${comment.body}\n\n`;
+        }
+      }
+
+      // Retry without inline comments
+      await octokit.rest.pulls.createReview({
+        owner: ref.owner,
+        repo: ref.repo,
+        pull_number: ref.pullNumber,
+        commit_id,
+        event,
+        body: updatedBody,
+        // No comments this time
+      });
+      return;
+    }
+
+    // Re-throw other errors
+    throw error;
+  }
 }
 
 /**

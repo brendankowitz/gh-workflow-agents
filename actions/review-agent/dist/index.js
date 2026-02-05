@@ -31241,15 +31241,44 @@ async function createPullRequestReview(octokit, ref, event, body, comments, comm
     });
     commit_id = pr.data.head.sha;
   }
-  await octokit.rest.pulls.createReview({
-    owner: ref.owner,
-    repo: ref.repo,
-    pull_number: ref.pullNumber,
-    commit_id,
-    event,
-    body,
-    comments
-  });
+  try {
+    await octokit.rest.pulls.createReview({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber,
+      commit_id,
+      event,
+      body,
+      comments
+    });
+  } catch (error3) {
+    const errorMsg = error3 instanceof Error ? error3.message.toLowerCase() : "";
+    const isLineError = errorMsg.includes("line") || errorMsg.includes("could not be resolved");
+    if (comments && comments.length > 0 && isLineError) {
+      console.log("Inline comments failed, retrying without them and adding to body...");
+      let updatedBody = body;
+      if (comments.length > 0) {
+        updatedBody += "\n\n---\n\n**Inline Comments** (could not attach to specific lines):\n\n";
+        for (const comment of comments) {
+          updatedBody += `**${comment.path}** (line ${comment.line}):
+${comment.body}
+
+`;
+        }
+      }
+      await octokit.rest.pulls.createReview({
+        owner: ref.owner,
+        repo: ref.repo,
+        pull_number: ref.pullNumber,
+        commit_id,
+        event,
+        body: updatedBody
+        // No comments this time
+      });
+      return;
+    }
+    throw error3;
+  }
 }
 async function isDependabotPR(octokit, ref) {
   const response = await octokit.rest.pulls.get({
