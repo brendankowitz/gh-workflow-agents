@@ -9,7 +9,11 @@ on:
     inputs:
       issue_number:
         description: 'Issue number to implement'
-        required: true
+        required: false
+        type: number
+      pr_number:
+        description: 'PR number to address feedback for'
+        required: false
         type: number
 
 jobs:
@@ -51,7 +55,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           issue-number: ${{ github.event.inputs.issue_number || github.event.issue.number || '' }}
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.inputs.pr_number || github.event.pull_request.number || '' }}
           model: 'claude-sonnet-4.5'
           max-iterations: '5'
           dry-run: 'false'
