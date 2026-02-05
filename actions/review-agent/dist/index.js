@@ -33198,10 +33198,18 @@ function buildReviewComment(result) {
   if (result.suggestions && result.suggestions.length > 0) {
     sections.push("\n### \u{1F4A1} Suggestions\n");
     for (const suggestion of result.suggestions) {
-      const fileRef = suggestion.file ? `**\`${suggestion.file}\`**: ` : "";
-      sections.push(`- ${fileRef}${suggestion.suggestion}`);
-      if (suggestion.rationale) {
-        sections.push(`  - *Rationale: ${suggestion.rationale}*`);
+      const s = suggestion;
+      if (typeof s === "string") {
+        sections.push(`- ${s}`);
+      } else if (s && typeof s === "object") {
+        const fileRef = s.file ? `**\`${s.file}\`**: ` : "";
+        const text = s.suggestion || s.description || s.text || JSON.stringify(s);
+        sections.push(`- ${fileRef}${text}`);
+        if (s.rationale) {
+          sections.push(`  - *Rationale: ${s.rationale}*`);
+        }
+      } else {
+        sections.push(`- ${String(s)}`);
       }
     }
   }
