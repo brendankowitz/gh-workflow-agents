@@ -267,53 +267,26 @@ export async function run(): Promise<void> {
       return;
     }
 
-    // Phases 2-3: Execute REPL loop and self-review with retry logic
-    // Retry up to 2 times if self-review fails
-    const maxRetries = 2;
-    let changes: CodeChanges | null = null;
-    let reviewPassed = false;
+    // Phases 2-3: Unified REPL loop with integrated self-review
+    // Continue iterating until AI says complete AND self-review passes
+    // Safety limit prevents infinite loops (50 is generous for complex tasks)
+    const SAFETY_MAX_ITERATIONS = 50;
+    core.info('Phase 2-3: Starting unified code generation loop...');
+    core.info(`Safety limit: ${SAFETY_MAX_ITERATIONS} iterations`);
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      // Phase 2: Execute REPL loop to generate code
-      core.info(`Phase 2 (attempt ${attempt}/${maxRetries}): Executing REPL loop...`);
-      changes = await executeREPLLoop(plan, config.maxIterations, contextSection, config.model);
-      core.info(`Generated changes for ${changes.files.length} files`);
+    const changes = await executeUnifiedLoop(
+      plan,
+      SAFETY_MAX_ITERATIONS,
+      contextSection,
+      config.model
+    );
 
-      // Check if any files were generated
-      if (changes.files.length === 0) {
-        core.warning(`Attempt ${attempt}: No files generated, will retry...`);
-        if (attempt < maxRetries) {
-          continue;
-        }
-        core.setFailed('Failed to generate any code changes after all retries.');
-        return;
-      }
-
-      // Phase 3: Self-review the changes
-      core.info(`Phase 3 (attempt ${attempt}/${maxRetries}): Self-reviewing changes...`);
-      const review = await selfReview(changes, contextSection, config.model);
-
-      if (review.passed) {
-        core.info('Self-review passed');
-        reviewPassed = true;
-        break;
-      }
-
-      // Self-review failed
-      core.warning(`Self-review found issues (attempt ${attempt}/${maxRetries}):`);
-      review.issues.forEach((issue) => core.warning(`  - ${issue}`));
-
-      if (attempt < maxRetries) {
-        core.info('Retrying code generation to address issues...');
-        // Add the issues to the plan for the next attempt
-        plan.approach += `\n\nPREVIOUS ATTEMPT ISSUES TO FIX:\n${review.issues.join('\n')}`;
-      }
-    }
-
-    if (!reviewPassed || !changes) {
-      core.setFailed('Self-review failed after all retries. Changes need manual improvement.');
+    if (!changes || changes.files.length === 0) {
+      core.setFailed('Failed to generate any code changes.');
       return;
     }
+
+    core.info(`Final result: ${changes.files.length} files generated`);
 
     // Phase 4: Commit and push changes
     core.info('Phase 4: Committing and pushing changes...');
@@ -794,8 +767,254 @@ interface CodeGenerationResponse {
 }
 
 /**
- * Executes REPL loop to generate code changes
- * Iteratively generates code until task is complete or max iterations reached
+ * Unified loop that combines code generation and self-review
+ * Continues until:
+ * 1. AI says isComplete AND self-review passes
+ * 2. OR safety max iterations reached
+ *
+ * When self-review fails, issues are fed back into the generation loop
+ */
+async function executeUnifiedLoop(
+  plan: TaskPlan,
+  safetyMaxIterations: number,
+  contextSection: string,
+  model: string
+): Promise<CodeChanges> {
+  core.info('Starting unified code generation loop...');
+  core.info(`Plan: ${plan.summary}`);
+  core.info(`Files to modify: ${plan.files.join(', ')}`);
+  core.info(`Safety max iterations: ${safetyMaxIterations}`);
+
+  // Check for Copilot authentication before starting
+  if (!hasCopilotAuth()) {
+    core.warning('No valid Copilot authentication found. Cannot generate code without AI.');
+    return {
+      files: [],
+      summary: 'Code generation skipped - no Copilot authentication available',
+      testsAdded: false,
+    };
+  }
+
+  // Track accumulated changes across all iterations
+  const accumulatedChanges = new Map<string, { path: string; content: string; operation: 'create' | 'modify' | 'delete' }>();
+  let iteration = 0;
+  let lastReasoning = '';
+  let selfReviewIssues: string[] = []; // Issues from self-review to address
+
+  // Build the system prompt for code generation
+  const systemPrompt = createCodeGenerationSystemPrompt().replace('{context}', contextSection);
+
+  // Main loop - continues until done or safety limit
+  while (iteration < safetyMaxIterations) {
+    iteration++;
+    core.info(`\n${'='.repeat(60)}`);
+    core.info(`Iteration ${iteration}/${safetyMaxIterations}`);
+    core.info(`${'='.repeat(60)}`);
+
+    try {
+      // Build the prompt, including any self-review issues to fix
+      const userPrompt = buildUnifiedPrompt(
+        plan,
+        Array.from(accumulatedChanges.values()),
+        iteration,
+        lastReasoning,
+        selfReviewIssues
+      );
+
+      // Send prompt to Copilot SDK
+      core.info('Generating code changes...');
+      const response = await sendPrompt(systemPrompt, userPrompt, { model });
+
+      if (response.finishReason === 'error' || !response.content) {
+        core.warning(`Iteration ${iteration}: Copilot SDK returned an error or empty response`);
+        // Don't break - let it retry
+        continue;
+      }
+
+      // Parse the JSON response
+      const parsed = parseAgentResponse<CodeGenerationResponse>(response.content);
+
+      if (!parsed) {
+        core.warning(`Iteration ${iteration}: Failed to parse response as JSON`);
+        continue;
+      }
+
+      // Validate the response structure
+      if (!parsed.files || !Array.isArray(parsed.files)) {
+        core.warning(`Iteration ${iteration}: Invalid response structure`);
+        continue;
+      }
+
+      // Log reasoning
+      if (parsed.reasoning) {
+        lastReasoning = parsed.reasoning;
+        core.info(`Reasoning: ${parsed.reasoning}`);
+      }
+
+      // Accumulate file changes
+      let newChanges = 0;
+      for (const file of parsed.files) {
+        if (!file.path || !file.operation) continue;
+
+        // SECURITY: Validate file path
+        const pathValidation = validateFilePath(file.path);
+        if (!pathValidation.valid) {
+          core.warning(`SECURITY: Rejecting unsafe path "${file.path}"`);
+          continue;
+        }
+
+        const isNew = !accumulatedChanges.has(file.path);
+        accumulatedChanges.set(file.path, {
+          path: file.path,
+          content: file.content || '',
+          operation: file.operation,
+        });
+
+        if (isNew) {
+          newChanges++;
+          core.info(`  ${file.operation}: ${file.path}`);
+        } else {
+          core.info(`  updated: ${file.path}`);
+        }
+      }
+
+      core.info(`Iteration ${iteration}: ${newChanges} new file(s), ${accumulatedChanges.size} total`);
+
+      // Check if AI thinks it's done
+      if (parsed.isComplete) {
+        core.info('AI indicates implementation is complete. Running self-review...');
+
+        // Build current changes for review
+        const currentChanges = buildCodeChanges(accumulatedChanges, plan.summary, iteration, true);
+
+        // Run self-review
+        const review = await selfReview(currentChanges, contextSection, model);
+
+        if (review.passed) {
+          core.info('✅ Self-review PASSED! Implementation complete.');
+          return currentChanges;
+        }
+
+        // Self-review found issues - feed them back
+        core.warning('Self-review found issues to address:');
+        review.issues.forEach((issue) => core.warning(`  - ${issue}`));
+
+        selfReviewIssues = review.issues;
+        core.info('Continuing generation to fix issues...');
+
+        // Don't mark as complete - let the loop continue
+      } else if (parsed.nextSteps && parsed.nextSteps.length > 0) {
+        core.info('Next steps from AI:');
+        parsed.nextSteps.forEach((step, idx) => core.info(`  ${idx + 1}. ${step}`));
+        // Clear any previous self-review issues since we're still working
+        selfReviewIssues = [];
+      }
+
+    } catch (error) {
+      core.warning(`Iteration ${iteration} error: ${error instanceof Error ? error.message : String(error)}`);
+      // Continue to next iteration
+    }
+  }
+
+  // Reached safety limit
+  core.warning(`Reached safety limit of ${safetyMaxIterations} iterations`);
+
+  // Return what we have, even if incomplete
+  const finalChanges = buildCodeChanges(accumulatedChanges, plan.summary, iteration, false);
+
+  // Do a final self-review to report status
+  if (finalChanges.files.length > 0) {
+    core.info('Running final self-review on partial implementation...');
+    const review = await selfReview(finalChanges, contextSection, model);
+    if (!review.passed) {
+      core.warning('Final self-review found issues:');
+      review.issues.forEach((issue) => core.warning(`  - ${issue}`));
+    }
+  }
+
+  return finalChanges;
+}
+
+/**
+ * Builds unified prompt including self-review issues to fix
+ */
+function buildUnifiedPrompt(
+  plan: TaskPlan,
+  currentChanges: Array<{ path: string; content: string; operation: 'create' | 'modify' | 'delete' }>,
+  iteration: number,
+  previousReasoning: string,
+  selfReviewIssues: string[]
+): string {
+  let prompt = `## Implementation Plan\n\n`;
+  prompt += `**Summary:** ${plan.summary}\n\n`;
+  prompt += `**Approach:**\n${plan.approach}\n\n`;
+  prompt += `**Files to modify:** ${plan.files.join(', ')}\n\n`;
+  prompt += `**Estimated complexity:** ${plan.estimatedComplexity}\n\n`;
+
+  // Add self-review issues if any
+  if (selfReviewIssues.length > 0) {
+    prompt += `## ⚠️ ISSUES TO FIX (from self-review)\n\n`;
+    prompt += `The previous implementation was reviewed and these issues MUST be addressed:\n\n`;
+    selfReviewIssues.forEach((issue, idx) => {
+      prompt += `${idx + 1}. ${issue}\n`;
+    });
+    prompt += `\nFix ALL of these issues before marking isComplete as true.\n\n`;
+  }
+
+  if (iteration === 1) {
+    prompt += `## Your Task\n\n`;
+    prompt += `This is iteration ${iteration}. Begin implementing the plan above.\n`;
+    prompt += `Generate the necessary code changes. Start with the most important files.\n`;
+  } else {
+    prompt += `## Current Progress\n\n`;
+    prompt += `This is iteration ${iteration}. You have made changes to ${currentChanges.length} file(s):\n\n`;
+
+    for (const change of currentChanges) {
+      prompt += `- ${change.operation}: ${change.path}\n`;
+    }
+
+    if (previousReasoning) {
+      prompt += `\n**Previous reasoning:** ${previousReasoning}\n`;
+    }
+
+    prompt += `\n## Your Task\n\n`;
+    if (selfReviewIssues.length > 0) {
+      prompt += `Address the issues listed above and continue implementing.\n`;
+    } else {
+      prompt += `Continue implementing the plan. What's the next step?\n`;
+    }
+    prompt += `Set "isComplete" to true ONLY when ALL requirements are met and all issues fixed.\n`;
+  }
+
+  prompt += `\nRespond with valid JSON only.`;
+  return prompt;
+}
+
+/**
+ * Builds CodeChanges from accumulated map
+ */
+function buildCodeChanges(
+  accumulatedChanges: Map<string, { path: string; content: string; operation: 'create' | 'modify' | 'delete' }>,
+  planSummary: string,
+  iterations: number,
+  isComplete: boolean
+): CodeChanges {
+  const files = Array.from(accumulatedChanges.values());
+
+  const testsAdded = files.some((file) =>
+    file.path.includes('test') ||
+    file.path.includes('spec') ||
+    file.path.includes('__tests__')
+  );
+
+  const summary = generateChangesSummary(files, planSummary, iterations, isComplete);
+
+  return { files, summary, testsAdded };
+}
+
+/**
+ * Executes REPL loop to generate code changes (legacy - kept for reference)
+ * @deprecated Use executeUnifiedLoop instead
  */
 async function executeREPLLoop(
   plan: TaskPlan,

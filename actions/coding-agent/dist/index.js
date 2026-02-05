@@ -32736,42 +32736,15 @@ If you still need changes, please:
       core2.setOutput("plan", JSON.stringify(plan));
       return;
     }
-    const maxRetries = 2;
-    let changes = null;
-    let reviewPassed = false;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      core2.info(`Phase 2 (attempt ${attempt}/${maxRetries}): Executing REPL loop...`);
-      changes = await executeREPLLoop(plan, config.maxIterations, contextSection, config.model);
-      core2.info(`Generated changes for ${changes.files.length} files`);
-      if (changes.files.length === 0) {
-        core2.warning(`Attempt ${attempt}: No files generated, will retry...`);
-        if (attempt < maxRetries) {
-          continue;
-        }
-        core2.setFailed("Failed to generate any code changes after all retries.");
-        return;
-      }
-      core2.info(`Phase 3 (attempt ${attempt}/${maxRetries}): Self-reviewing changes...`);
-      const review = await selfReview(changes, contextSection, config.model);
-      if (review.passed) {
-        core2.info("Self-review passed");
-        reviewPassed = true;
-        break;
-      }
-      core2.warning(`Self-review found issues (attempt ${attempt}/${maxRetries}):`);
-      review.issues.forEach((issue) => core2.warning(`  - ${issue}`));
-      if (attempt < maxRetries) {
-        core2.info("Retrying code generation to address issues...");
-        plan.approach += `
-
-PREVIOUS ATTEMPT ISSUES TO FIX:
-${review.issues.join("\n")}`;
-      }
-    }
-    if (!reviewPassed || !changes) {
-      core2.setFailed("Self-review failed after all retries. Changes need manual improvement.");
+    const SAFETY_MAX_ITERATIONS = 50;
+    core2.info("Phase 2-3: Starting unified code generation loop...");
+    core2.info(`Safety limit: ${SAFETY_MAX_ITERATIONS} iterations`);
+    const changes = await executeUnifiedLoop(plan, SAFETY_MAX_ITERATIONS, contextSection, config.model);
+    if (!changes || changes.files.length === 0) {
+      core2.setFailed("Failed to generate any code changes.");
       return;
     }
+    core2.info(`Final result: ${changes.files.length} files generated`);
     core2.info("Phase 4: Committing and pushing changes...");
     const commitResult = await commitAndPush(changes, task, config);
     core2.info(`Committed to branch: ${commitResult.branchName}`);
@@ -33121,11 +33094,11 @@ Respond with valid JSON only.
 `.trim();
   }
 }
-async function executeREPLLoop(plan, maxIterations, contextSection, model) {
-  core2.info("Executing REPL loop for code generation...");
-  core2.info(`Max iterations: ${maxIterations}`);
+async function executeUnifiedLoop(plan, safetyMaxIterations, contextSection, model) {
+  core2.info("Starting unified code generation loop...");
   core2.info(`Plan: ${plan.summary}`);
   core2.info(`Files to modify: ${plan.files.join(", ")}`);
+  core2.info(`Safety max iterations: ${safetyMaxIterations}`);
   if (!hasCopilotAuth()) {
     core2.warning("No valid Copilot authentication found. Cannot generate code without AI.");
     return {
@@ -33135,31 +33108,32 @@ async function executeREPLLoop(plan, maxIterations, contextSection, model) {
     };
   }
   const accumulatedChanges = /* @__PURE__ */ new Map();
-  let isComplete = false;
   let iteration = 0;
   let lastReasoning = "";
+  let selfReviewIssues = [];
   const systemPrompt = createCodeGenerationSystemPrompt().replace("{context}", contextSection);
-  while (iteration < maxIterations && !isComplete) {
+  while (iteration < safetyMaxIterations) {
     iteration++;
     core2.info(`
---- Iteration ${iteration}/${maxIterations} ---`);
+${"=".repeat(60)}`);
+    core2.info(`Iteration ${iteration}/${safetyMaxIterations}`);
+    core2.info(`${"=".repeat(60)}`);
     try {
-      const userPrompt = buildCodeGenerationPrompt(plan, Array.from(accumulatedChanges.values()), iteration, lastReasoning);
+      const userPrompt = buildUnifiedPrompt(plan, Array.from(accumulatedChanges.values()), iteration, lastReasoning, selfReviewIssues);
       core2.info("Generating code changes...");
       const response = await sendPrompt(systemPrompt, userPrompt, { model });
       if (response.finishReason === "error" || !response.content) {
         core2.warning(`Iteration ${iteration}: Copilot SDK returned an error or empty response`);
-        break;
+        continue;
       }
       const parsed = parseAgentResponse(response.content);
       if (!parsed) {
-        core2.warning(`Iteration ${iteration}: Failed to parse Copilot SDK response as JSON`);
-        core2.debug(`Raw response: ${response.content}`);
-        break;
+        core2.warning(`Iteration ${iteration}: Failed to parse response as JSON`);
+        continue;
       }
       if (!parsed.files || !Array.isArray(parsed.files)) {
-        core2.warning(`Iteration ${iteration}: Invalid response structure - missing files array`);
-        break;
+        core2.warning(`Iteration ${iteration}: Invalid response structure`);
+        continue;
       }
       if (parsed.reasoning) {
         lastReasoning = parsed.reasoning;
@@ -33167,13 +33141,11 @@ async function executeREPLLoop(plan, maxIterations, contextSection, model) {
       }
       let newChanges = 0;
       for (const file of parsed.files) {
-        if (!file.path || !file.operation) {
-          core2.warning(`Skipping invalid file entry: ${JSON.stringify(file)}`);
+        if (!file.path || !file.operation)
           continue;
-        }
         const pathValidation = validateFilePath(file.path);
         if (!pathValidation.valid) {
-          core2.warning(`SECURITY: Rejecting unsafe file path "${file.path}": ${pathValidation.reason}`);
+          core2.warning(`SECURITY: Rejecting unsafe path "${file.path}"`);
           continue;
         }
         const isNew = !accumulatedChanges.has(file.path);
@@ -33186,46 +33158,123 @@ async function executeREPLLoop(plan, maxIterations, contextSection, model) {
           newChanges++;
           core2.info(`  ${file.operation}: ${file.path}`);
         } else {
-          core2.info(`  updated ${file.operation}: ${file.path}`);
+          core2.info(`  updated: ${file.path}`);
         }
       }
       core2.info(`Iteration ${iteration}: ${newChanges} new file(s), ${accumulatedChanges.size} total`);
       if (parsed.isComplete) {
-        core2.info("AI indicates task is complete");
-        isComplete = true;
+        core2.info("AI indicates implementation is complete. Running self-review...");
+        const currentChanges = buildCodeChanges(accumulatedChanges, plan.summary, iteration, true);
+        const review = await selfReview(currentChanges, contextSection, model);
+        if (review.passed) {
+          core2.info("\u2705 Self-review PASSED! Implementation complete.");
+          return currentChanges;
+        }
+        core2.warning("Self-review found issues to address:");
+        review.issues.forEach((issue) => core2.warning(`  - ${issue}`));
+        selfReviewIssues = review.issues;
+        core2.info("Continuing generation to fix issues...");
       } else if (parsed.nextSteps && parsed.nextSteps.length > 0) {
-        core2.info("Next steps:");
+        core2.info("Next steps from AI:");
         parsed.nextSteps.forEach((step, idx) => core2.info(`  ${idx + 1}. ${step}`));
-      }
-      if (!isComplete && iteration >= maxIterations) {
-        core2.warning(`Reached maximum iterations (${maxIterations})`);
-      }
-      const plannedFilesAddressed = plan.files.every((plannedFile) => {
-        return Array.from(accumulatedChanges.keys()).some((changedFile) => changedFile.includes(plannedFile) || plannedFile.includes(changedFile));
-      });
-      if (!isComplete && plannedFilesAddressed && iteration > 1) {
-        core2.info("All planned files have been addressed");
-        isComplete = true;
+        selfReviewIssues = [];
       }
     } catch (error3) {
       core2.warning(`Iteration ${iteration} error: ${error3 instanceof Error ? error3.message : String(error3)}`);
-      break;
     }
   }
+  core2.warning(`Reached safety limit of ${safetyMaxIterations} iterations`);
+  const finalChanges = buildCodeChanges(accumulatedChanges, plan.summary, iteration, false);
+  if (finalChanges.files.length > 0) {
+    core2.info("Running final self-review on partial implementation...");
+    const review = await selfReview(finalChanges, contextSection, model);
+    if (!review.passed) {
+      core2.warning("Final self-review found issues:");
+      review.issues.forEach((issue) => core2.warning(`  - ${issue}`));
+    }
+  }
+  return finalChanges;
+}
+function buildUnifiedPrompt(plan, currentChanges, iteration, previousReasoning, selfReviewIssues) {
+  let prompt = `## Implementation Plan
+
+`;
+  prompt += `**Summary:** ${plan.summary}
+
+`;
+  prompt += `**Approach:**
+${plan.approach}
+
+`;
+  prompt += `**Files to modify:** ${plan.files.join(", ")}
+
+`;
+  prompt += `**Estimated complexity:** ${plan.estimatedComplexity}
+
+`;
+  if (selfReviewIssues.length > 0) {
+    prompt += `## \u26A0\uFE0F ISSUES TO FIX (from self-review)
+
+`;
+    prompt += `The previous implementation was reviewed and these issues MUST be addressed:
+
+`;
+    selfReviewIssues.forEach((issue, idx) => {
+      prompt += `${idx + 1}. ${issue}
+`;
+    });
+    prompt += `
+Fix ALL of these issues before marking isComplete as true.
+
+`;
+  }
+  if (iteration === 1) {
+    prompt += `## Your Task
+
+`;
+    prompt += `This is iteration ${iteration}. Begin implementing the plan above.
+`;
+    prompt += `Generate the necessary code changes. Start with the most important files.
+`;
+  } else {
+    prompt += `## Current Progress
+
+`;
+    prompt += `This is iteration ${iteration}. You have made changes to ${currentChanges.length} file(s):
+
+`;
+    for (const change of currentChanges) {
+      prompt += `- ${change.operation}: ${change.path}
+`;
+    }
+    if (previousReasoning) {
+      prompt += `
+**Previous reasoning:** ${previousReasoning}
+`;
+    }
+    prompt += `
+## Your Task
+
+`;
+    if (selfReviewIssues.length > 0) {
+      prompt += `Address the issues listed above and continue implementing.
+`;
+    } else {
+      prompt += `Continue implementing the plan. What's the next step?
+`;
+    }
+    prompt += `Set "isComplete" to true ONLY when ALL requirements are met and all issues fixed.
+`;
+  }
+  prompt += `
+Respond with valid JSON only.`;
+  return prompt;
+}
+function buildCodeChanges(accumulatedChanges, planSummary, iterations, isComplete) {
   const files = Array.from(accumulatedChanges.values());
   const testsAdded = files.some((file) => file.path.includes("test") || file.path.includes("spec") || file.path.includes("__tests__"));
-  const summary = generateChangesSummary(files, plan.summary, iteration, isComplete);
-  core2.info(`
-Code generation complete:`);
-  core2.info(`  Files changed: ${files.length}`);
-  core2.info(`  Tests added: ${testsAdded ? "Yes" : "No"}`);
-  core2.info(`  Iterations used: ${iteration}/${maxIterations}`);
-  core2.info(`  Task complete: ${isComplete ? "Yes" : "Partial"}`);
-  return {
-    files,
-    summary,
-    testsAdded
-  };
+  const summary = generateChangesSummary(files, planSummary, iterations, isComplete);
+  return { files, summary, testsAdded };
 }
 function createCodeGenerationSystemPrompt() {
   return `You are an expert software engineer implementing code changes for a GitHub issue or PR feedback.
@@ -33296,65 +33345,6 @@ Important:
 - Use proper indentation and formatting
 - Include all necessary imports and dependencies
 - Respond with valid JSON only. Do not include any text outside the JSON.`;
-}
-function buildCodeGenerationPrompt(plan, currentChanges, iteration, previousReasoning) {
-  let prompt = `## Implementation Plan
-
-`;
-  prompt += `**Summary:** ${plan.summary}
-
-`;
-  prompt += `**Approach:**
-${plan.approach}
-
-`;
-  prompt += `**Files to modify:** ${plan.files.join(", ")}
-
-`;
-  prompt += `**Estimated complexity:** ${plan.estimatedComplexity}
-
-`;
-  if (iteration === 1) {
-    prompt += `## Your Task
-
-`;
-    prompt += `This is iteration ${iteration}. Begin implementing the plan above.
-`;
-    prompt += `Generate the necessary code changes to accomplish this task.
-
-`;
-    prompt += `Start with the most important files first.
-`;
-  } else {
-    prompt += `## Current Progress
-
-`;
-    prompt += `This is iteration ${iteration}. You have already made changes to ${currentChanges.length} file(s):
-
-`;
-    for (const change of currentChanges) {
-      prompt += `- ${change.operation}: ${change.path}
-`;
-    }
-    if (previousReasoning) {
-      prompt += `
-**Previous reasoning:** ${previousReasoning}
-`;
-    }
-    prompt += `
-## Your Task
-
-`;
-    prompt += `Continue implementing the plan. What's the next step?
-`;
-    prompt += `If you've completed the task, set "isComplete" to true.
-`;
-    prompt += `Otherwise, generate the next set of changes and list the remaining steps.
-`;
-  }
-  prompt += `
-Respond with valid JSON only.`;
-  return prompt;
 }
 function generateChangesSummary(files, planSummary, iterations, isComplete) {
   const created = files.filter((f) => f.operation === "create").length;
