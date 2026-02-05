@@ -33103,22 +33103,81 @@ function mapAssessmentToEvent(result) {
 }
 function buildReviewComment(result) {
   const sections = ["## \u{1F916} AI Code Review\n"];
+  sections.push("### Overview\n");
   sections.push(result.summary);
   if (result.securityIssues.length > 0) {
     sections.push("\n### \u{1F512} Security Issues\n");
-    for (const issue of result.securityIssues) {
-      const icon = issue.severity === "critical" ? "\u{1F6A8}" : issue.severity === "high" ? "\u26A0\uFE0F" : "\u2139\uFE0F";
-      sections.push(`${icon} **${issue.severity.toUpperCase()}** in \`${issue.file}\``);
-      sections.push(`   ${issue.description}`);
-      if (issue.suggestion) {
-        sections.push(`   \u{1F4A1} ${issue.suggestion}`);
+    const critical = result.securityIssues.filter((i) => i.severity === "critical");
+    const high = result.securityIssues.filter((i) => i.severity === "high");
+    const medium = result.securityIssues.filter((i) => i.severity === "medium");
+    const low = result.securityIssues.filter((i) => i.severity === "low");
+    if (critical.length > 0) {
+      sections.push("**\u{1F6A8} Critical**");
+      for (const issue of critical) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion)
+          sections.push(`  - \u{1F4A1} ${issue.suggestion}`);
+      }
+    }
+    if (high.length > 0) {
+      sections.push("**\u26A0\uFE0F High**");
+      for (const issue of high) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion)
+          sections.push(`  - \u{1F4A1} ${issue.suggestion}`);
+      }
+    }
+    if (medium.length > 0) {
+      sections.push("**\u{1F7E1} Medium**");
+      for (const issue of medium) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion)
+          sections.push(`  - \u{1F4A1} ${issue.suggestion}`);
+      }
+    }
+    if (low.length > 0) {
+      sections.push("**\u{1F7E2} Low/Informational**");
+      for (const issue of low) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion)
+          sections.push(`  - \u{1F4A1} ${issue.suggestion}`);
       }
     }
   }
   if (result.codeQualityIssues.length > 0) {
     sections.push("\n### \u{1F4DD} Code Quality\n");
     for (const issue of result.codeQualityIssues) {
-      sections.push(`- **${issue.file}**: ${issue.description}`);
+      sections.push(`- **\`${issue.file}\`**: ${issue.description}`);
+      if (issue.suggestion)
+        sections.push(`  - \u{1F4A1} ${issue.suggestion}`);
+    }
+  }
+  if (result.suggestions && result.suggestions.length > 0) {
+    sections.push("\n### \u{1F4A1} Suggestions\n");
+    for (const suggestion of result.suggestions) {
+      sections.push(`- ${suggestion}`);
+    }
+  }
+  sections.push("\n### \u{1F4CB} Final Recommendation\n");
+  const criticalCount = result.securityIssues.filter((i) => i.severity === "critical").length;
+  const highCount = result.securityIssues.filter((i) => i.severity === "high").length;
+  const mediumCount = result.securityIssues.filter((i) => i.severity === "medium").length;
+  const qualityCount = result.codeQualityIssues.length;
+  if (result.overallAssessment === "approve") {
+    sections.push("\u2705 **APPROVE** - No blocking issues found. Code looks good to merge.");
+  } else if (result.overallAssessment === "request-changes") {
+    if (criticalCount > 0 || highCount > 0) {
+      sections.push(`\u{1F6AB} **REQUEST CHANGES** - Found ${criticalCount + highCount} critical/high severity issue(s) that must be addressed before merging.`);
+    } else {
+      sections.push("\u{1F6AB} **REQUEST CHANGES** - Issues found that should be addressed before merging.");
+    }
+  } else {
+    if (criticalCount === 0 && highCount === 0 && (mediumCount > 0 || qualityCount > 0)) {
+      sections.push(`\u2705 **APPROVE with suggestions** - No blocking issues. ${mediumCount + qualityCount} minor item(s) for consideration.`);
+    } else if (criticalCount === 0 && highCount === 0) {
+      sections.push("\u2705 **APPROVE** - No significant issues found.");
+    } else {
+      sections.push("\u26A0\uFE0F **NEEDS ATTENTION** - Review the issues above before merging.");
     }
   }
   sections.push("\n---\n*Review by GH-Agency Review Agent*");

@@ -175,7 +175,8 @@ export async function sendPrompt(
     });
 
     // Send the user prompt and wait for response with extended timeout for CI
-    const timeoutMs = process.env.GITHUB_ACTIONS ? 300000 : 120000; // 5 min in CI, 2 min locally
+    // Code generation can take a long time for complex tasks - use 1 hour timeout in CI
+    const timeoutMs = process.env.GITHUB_ACTIONS ? 3600000 : 300000; // 1 hour in CI, 5 min locally
     const response = await session.sendAndWait({
       prompt: userPrompt,
     }, timeoutMs);

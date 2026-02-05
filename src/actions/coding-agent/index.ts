@@ -267,21 +267,53 @@ export async function run(): Promise<void> {
       return;
     }
 
-    // Phase 2: Execute REPL loop to generate code
-    core.info('Phase 2: Executing REPL loop...');
-    const changes = await executeREPLLoop(plan, config.maxIterations, contextSection, config.model);
-    core.info(`Generated changes for ${changes.files.length} files`);
+    // Phases 2-3: Execute REPL loop and self-review with retry logic
+    // Retry up to 2 times if self-review fails
+    const maxRetries = 2;
+    let changes: CodeChanges | null = null;
+    let reviewPassed = false;
 
-    // Phase 3: Self-review the changes
-    core.info('Phase 3: Self-reviewing changes...');
-    const review = await selfReview(changes, contextSection, config.model);
-    if (!review.passed) {
-      core.warning('Self-review found issues:');
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Phase 2: Execute REPL loop to generate code
+      core.info(`Phase 2 (attempt ${attempt}/${maxRetries}): Executing REPL loop...`);
+      changes = await executeREPLLoop(plan, config.maxIterations, contextSection, config.model);
+      core.info(`Generated changes for ${changes.files.length} files`);
+
+      // Check if any files were generated
+      if (changes.files.length === 0) {
+        core.warning(`Attempt ${attempt}: No files generated, will retry...`);
+        if (attempt < maxRetries) {
+          continue;
+        }
+        core.setFailed('Failed to generate any code changes after all retries.');
+        return;
+      }
+
+      // Phase 3: Self-review the changes
+      core.info(`Phase 3 (attempt ${attempt}/${maxRetries}): Self-reviewing changes...`);
+      const review = await selfReview(changes, contextSection, config.model);
+
+      if (review.passed) {
+        core.info('Self-review passed');
+        reviewPassed = true;
+        break;
+      }
+
+      // Self-review failed
+      core.warning(`Self-review found issues (attempt ${attempt}/${maxRetries}):`);
       review.issues.forEach((issue) => core.warning(`  - ${issue}`));
-      core.setFailed('Self-review failed. Changes need improvement.');
+
+      if (attempt < maxRetries) {
+        core.info('Retrying code generation to address issues...');
+        // Add the issues to the plan for the next attempt
+        plan.approach += `\n\nPREVIOUS ATTEMPT ISSUES TO FIX:\n${review.issues.join('\n')}`;
+      }
+    }
+
+    if (!reviewPassed || !changes) {
+      core.setFailed('Self-review failed after all retries. Changes need manual improvement.');
       return;
     }
-    core.info('Self-review passed');
 
     // Phase 4: Commit and push changes
     core.info('Phase 4: Committing and pushing changes...');

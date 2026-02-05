@@ -77,8 +77,10 @@ export async function removeLabels(
         name: label,
       });
     } catch (error) {
-      // Ignore errors if label doesn't exist on issue
-      if (error instanceof Error && !error.message.includes('404')) {
+      // Ignore errors if label doesn't exist on issue (404 or "Label does not exist")
+      const msg = error instanceof Error ? error.message.toLowerCase() : '';
+      const isNotFound = msg.includes('404') || msg.includes('not found') || msg.includes('does not exist');
+      if (!isNotFound) {
         throw error;
       }
     }

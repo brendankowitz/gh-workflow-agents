@@ -494,29 +494,95 @@ function mapAssessmentToEvent(result: ReviewResult): 'APPROVE' | 'REQUEST_CHANGE
 }
 
 /**
- * Builds the review comment body
+ * Builds the review comment body with structured sections
  */
 function buildReviewComment(result: ReviewResult): string {
   const sections: string[] = ['## 🤖 AI Code Review\n'];
 
+  // Overview/Summary
+  sections.push('### Overview\n');
   sections.push(result.summary);
 
+  // Security Issues (by severity)
   if (result.securityIssues.length > 0) {
     sections.push('\n### 🔒 Security Issues\n');
-    for (const issue of result.securityIssues) {
-      const icon = issue.severity === 'critical' ? '🚨' : issue.severity === 'high' ? '⚠️' : 'ℹ️';
-      sections.push(`${icon} **${issue.severity.toUpperCase()}** in \`${issue.file}\``);
-      sections.push(`   ${issue.description}`);
-      if (issue.suggestion) {
-        sections.push(`   💡 ${issue.suggestion}`);
+
+    // Group by severity
+    const critical = result.securityIssues.filter(i => i.severity === 'critical');
+    const high = result.securityIssues.filter(i => i.severity === 'high');
+    const medium = result.securityIssues.filter(i => i.severity === 'medium');
+    const low = result.securityIssues.filter(i => i.severity === 'low');
+
+    if (critical.length > 0) {
+      sections.push('**🚨 Critical**');
+      for (const issue of critical) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion) sections.push(`  - 💡 ${issue.suggestion}`);
+      }
+    }
+    if (high.length > 0) {
+      sections.push('**⚠️ High**');
+      for (const issue of high) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion) sections.push(`  - 💡 ${issue.suggestion}`);
+      }
+    }
+    if (medium.length > 0) {
+      sections.push('**🟡 Medium**');
+      for (const issue of medium) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion) sections.push(`  - 💡 ${issue.suggestion}`);
+      }
+    }
+    if (low.length > 0) {
+      sections.push('**🟢 Low/Informational**');
+      for (const issue of low) {
+        sections.push(`- \`${issue.file}\`: ${issue.description}`);
+        if (issue.suggestion) sections.push(`  - 💡 ${issue.suggestion}`);
       }
     }
   }
 
+  // Code Quality Issues
   if (result.codeQualityIssues.length > 0) {
     sections.push('\n### 📝 Code Quality\n');
     for (const issue of result.codeQualityIssues) {
-      sections.push(`- **${issue.file}**: ${issue.description}`);
+      sections.push(`- **\`${issue.file}\`**: ${issue.description}`);
+      if (issue.suggestion) sections.push(`  - 💡 ${issue.suggestion}`);
+    }
+  }
+
+  // Suggestions (if any)
+  if (result.suggestions && result.suggestions.length > 0) {
+    sections.push('\n### 💡 Suggestions\n');
+    for (const suggestion of result.suggestions) {
+      sections.push(`- ${suggestion}`);
+    }
+  }
+
+  // Final Recommendation
+  sections.push('\n### 📋 Final Recommendation\n');
+  const criticalCount = result.securityIssues.filter(i => i.severity === 'critical').length;
+  const highCount = result.securityIssues.filter(i => i.severity === 'high').length;
+  const mediumCount = result.securityIssues.filter(i => i.severity === 'medium').length;
+  const qualityCount = result.codeQualityIssues.length;
+
+  if (result.overallAssessment === 'approve') {
+    sections.push('✅ **APPROVE** - No blocking issues found. Code looks good to merge.');
+  } else if (result.overallAssessment === 'request-changes') {
+    if (criticalCount > 0 || highCount > 0) {
+      sections.push(`🚫 **REQUEST CHANGES** - Found ${criticalCount + highCount} critical/high severity issue(s) that must be addressed before merging.`);
+    } else {
+      sections.push('🚫 **REQUEST CHANGES** - Issues found that should be addressed before merging.');
+    }
+  } else {
+    // Comment
+    if (criticalCount === 0 && highCount === 0 && (mediumCount > 0 || qualityCount > 0)) {
+      sections.push(`✅ **APPROVE with suggestions** - No blocking issues. ${mediumCount + qualityCount} minor item(s) for consideration.`);
+    } else if (criticalCount === 0 && highCount === 0) {
+      sections.push('✅ **APPROVE** - No significant issues found.');
+    } else {
+      sections.push('⚠️ **NEEDS ATTENTION** - Review the issues above before merging.');
     }
   }
 
