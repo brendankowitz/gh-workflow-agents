@@ -1,0 +1,65 @@
+name: AI Coding Agent
+
+on:
+  issues:
+    types: [labeled]
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to implement'
+        required: true
+        type: number
+
+jobs:
+  code:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    # Trigger on 'ready-for-agent' label OR changes_requested on 'agent-coded' PR
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'ready-for-agent') ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.state == 'changes_requested' &&
+       contains(github.event.pull_request.labels.*.name, 'agent-coded'))
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub Copilot CLI
+        run: |
+          npm install -g @githubnext/github-copilot-cli
+          echo "Copilot CLI installed"
+
+      - name: AI Coding Agent
+        uses: ./actions/coding-agent
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.issue_number || github.event.issue.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          model: 'claude-sonnet-4.5'
+          max-iterations: '5'
+          dry-run: 'false'
+
+      - name: Output Results
+        if: always()
+        run: |
+          echo "Status: ${{ steps.code.outputs.status }}"
+          echo "Branch: ${{ steps.code.outputs.branch-name }}"
+          echo "PR: ${{ steps.code.outputs.pr-number }}"
+          echo "Summary: ${{ steps.code.outputs.changes-summary }}"

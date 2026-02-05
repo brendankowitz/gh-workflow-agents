@@ -1,0 +1,43 @@
+name: 'GH-Agency Coding Agent'
+description: 'AI-powered autonomous code implementation'
+author: 'GH-Agency'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+  copilot-token:
+    description: 'GitHub Copilot token (fine-grained PAT with Copilot access)'
+    required: true
+  issue-number:
+    description: 'Issue number to implement (for workflow_dispatch)'
+    required: false
+  pr-number:
+    description: 'PR number to update based on review feedback (for workflow_dispatch)'
+    required: false
+  model:
+    description: 'AI model to use for code generation'
+    required: false
+    default: 'claude-sonnet-4.5'
+  max-iterations:
+    description: 'Maximum REPL iterations for code generation'
+    required: false
+    default: '5'
+  dry-run:
+    description: 'Plan only without executing changes'
+    required: false
+    default: 'false'
+
+outputs:
+  branch-name:
+    description: 'Name of the branch with changes'
+  pr-number:
+    description: 'Pull request number (created or updated)'
+  changes-summary:
+    description: 'Summary of changes made'
+  status:
+    description: 'Status of the coding task (success, partial, failed, dry-run)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

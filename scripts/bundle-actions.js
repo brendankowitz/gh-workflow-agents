@@ -18,6 +18,7 @@ const actions = [
   'triage-agent',
   'review-agent',
   'research-agent',
+  'coding-agent',
 ];
 
 async function bundleAction(actionName) {

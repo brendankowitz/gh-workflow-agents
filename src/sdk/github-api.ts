@@ -54,6 +54,38 @@ export async function addLabels(
 }
 
 /**
+ * Removes labels from an issue
+ *
+ * @param octokit - Authenticated Octokit
+ * @param ref - Issue reference
+ * @param labels - Labels to remove
+ */
+export async function removeLabels(
+  octokit: Octokit,
+  ref: IssueRef,
+  labels: AllowedLabel[]
+): Promise<void> {
+  if (labels.length === 0) return;
+
+  // Remove each label individually as GitHub API doesn't support batch removal
+  for (const label of labels) {
+    try {
+      await octokit.rest.issues.removeLabel({
+        owner: ref.owner,
+        repo: ref.repo,
+        issue_number: ref.issueNumber,
+        name: label,
+      });
+    } catch (error) {
+      // Ignore errors if label doesn't exist on issue
+      if (error instanceof Error && !error.message.includes('404')) {
+        throw error;
+      }
+    }
+  }
+}
+
+/**
  * Posts a comment on an issue or PR
  *
  * @param octokit - Authenticated Octokit

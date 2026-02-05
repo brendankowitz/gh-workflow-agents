@@ -15,6 +15,7 @@ export {
 export {
   createOctokit,
   addLabels,
+  removeLabels,
   createComment,
   createPullRequestReview,
   dispatchRepositoryEvent,
