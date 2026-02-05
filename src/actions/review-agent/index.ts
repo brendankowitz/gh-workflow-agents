@@ -40,6 +40,7 @@ import {
 /** Review agent configuration */
 interface ReviewConfig {
   githubToken: string;
+  copilotToken: string;
   model: string;
   mode: 'analyze-only' | 'full';
   autoApproveDependabot: boolean;
@@ -183,6 +184,25 @@ export async function run(): Promise<void> {
       inlineComments
     );
 
+    // If there are fixable issues and we have a user token, post @copilot mention
+    // using the user's PAT so Copilot responds (bots can't trigger Copilot)
+    const hasFixableIssues = validated.securityIssues.length > 0 || validated.codeQualityIssues.length > 0;
+    if (hasFixableIssues && validated.overallAssessment !== 'approve' && config.copilotToken) {
+      try {
+        // Use the user's PAT to post the @copilot mention
+        const userOctokit = createOctokit(config.copilotToken);
+        await userOctokit.rest.issues.createComment({
+          owner: ref.owner,
+          repo: ref.repo,
+          issue_number: pr.number,
+          body: '@copilot please address the issues identified in the review above.',
+        });
+        core.info('Posted @copilot mention using user token');
+      } catch (error) {
+        core.warning(`Failed to post @copilot mention: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+
     // Log audit entry
     const auditEntry = createAuditEntry(
       'review-agent',
@@ -237,6 +257,7 @@ function getConfig(): ReviewConfig {
 
   return {
     githubToken: core.getInput('github-token', { required: true }),
+    copilotToken: copilotToken || '',
     model: core.getInput('model') || 'claude-sonnet-4.5',
     mode: (core.getInput('mode') || 'full') as 'analyze-only' | 'full',
     autoApproveDependabot: core.getBooleanInput('auto-approve-dependabot'),
@@ -499,12 +520,8 @@ function buildReviewComment(result: ReviewResult): string {
     }
   }
 
-  // Add @copilot mention if there are fixable issues
-  const hasFixableIssues = result.securityIssues.length > 0 || result.codeQualityIssues.length > 0;
-  if (hasFixableIssues && result.overallAssessment !== 'approve') {
-    sections.push('\n---\n');
-    sections.push('@copilot please address the issues identified above.');
-  }
+  // Note: @copilot mention is posted separately using user's token
+  // because Copilot doesn't respond to mentions from bots
 
   sections.push('\n---\n*Review by GH-Agency Review Agent*');
 

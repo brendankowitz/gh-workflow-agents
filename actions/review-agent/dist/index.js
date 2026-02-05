@@ -32910,6 +32910,21 @@ async function run() {
     const inlineComments = buildInlineComments(validated);
     core2.info(`Posting review with assessment: ${validated.overallAssessment}`);
     await createPullRequestReview(octokit, ref, event, reviewBody, inlineComments);
+    const hasFixableIssues = validated.securityIssues.length > 0 || validated.codeQualityIssues.length > 0;
+    if (hasFixableIssues && validated.overallAssessment !== "approve" && config.copilotToken) {
+      try {
+        const userOctokit = createOctokit(config.copilotToken);
+        await userOctokit.rest.issues.createComment({
+          owner: ref.owner,
+          repo: ref.repo,
+          issue_number: pr.number,
+          body: "@copilot please address the issues identified in the review above."
+        });
+        core2.info("Posted @copilot mention using user token");
+      } catch (error3) {
+        core2.warning(`Failed to post @copilot mention: ${error3 instanceof Error ? error3.message : error3}`);
+      }
+    }
     const auditEntry = createAuditEntry("review-agent", `${pr.title}
 ${diff.substring(0, 1e3)}`, [
       ...sanitizedTitle.detectedPatterns,
@@ -32942,6 +32957,7 @@ function getConfig() {
   }
   return {
     githubToken: core2.getInput("github-token", { required: true }),
+    copilotToken: copilotToken || "",
     model: core2.getInput("model") || "claude-sonnet-4.5",
     mode: core2.getInput("mode") || "full",
     autoApproveDependabot: core2.getBooleanInput("auto-approve-dependabot"),
@@ -33104,11 +33120,6 @@ function buildReviewComment(result) {
     for (const issue of result.codeQualityIssues) {
       sections.push(`- **${issue.file}**: ${issue.description}`);
     }
-  }
-  const hasFixableIssues = result.securityIssues.length > 0 || result.codeQualityIssues.length > 0;
-  if (hasFixableIssues && result.overallAssessment !== "approve") {
-    sections.push("\n---\n");
-    sections.push("@copilot please address the issues identified above.");
   }
   sections.push("\n---\n*Review by GH-Agency Review Agent*");
   return sections.join("\n");
