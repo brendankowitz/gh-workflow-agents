@@ -556,7 +556,11 @@ function buildReviewComment(result: ReviewResult): string {
   if (result.suggestions && result.suggestions.length > 0) {
     sections.push('\n### 💡 Suggestions\n');
     for (const suggestion of result.suggestions) {
-      sections.push(`- ${suggestion}`);
+      const fileRef = suggestion.file ? `**\`${suggestion.file}\`**: ` : '';
+      sections.push(`- ${fileRef}${suggestion.suggestion}`);
+      if (suggestion.rationale) {
+        sections.push(`  - *Rationale: ${suggestion.rationale}*`);
+      }
     }
   }
 

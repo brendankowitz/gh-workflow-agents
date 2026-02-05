@@ -33184,7 +33184,11 @@ function buildReviewComment(result) {
   if (result.suggestions && result.suggestions.length > 0) {
     sections.push("\n### \u{1F4A1} Suggestions\n");
     for (const suggestion of result.suggestions) {
-      sections.push(`- ${suggestion}`);
+      const fileRef = suggestion.file ? `**\`${suggestion.file}\`**: ` : "";
+      sections.push(`- ${fileRef}${suggestion.suggestion}`);
+      if (suggestion.rationale) {
+        sections.push(`  - *Rationale: ${suggestion.rationale}*`);
+      }
     }
   }
   sections.push("\n### \u{1F4CB} Final Recommendation\n");
