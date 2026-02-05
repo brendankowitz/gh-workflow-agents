@@ -50,7 +50,9 @@ jobs:
           echo "Copilot CLI installed"
 
       - name: AI Coding Agent
-        uses: ./actions/coding-agent
+        uses: brendankowitz/gh-workflow-agents/actions/coding-agent@main
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
