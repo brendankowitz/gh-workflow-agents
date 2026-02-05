@@ -31249,7 +31249,7 @@ async function createComment(octokit, ref, body) {
   return response.data.id;
 }
 async function logAgentDecision(octokit, ref, auditEntry) {
-  const comment = `<details><summary>\u{1F916} Agent Decision Log</summary>
+  const comment = `<details><summary>\u2728 Agent Decision Log</summary>
 
 \`\`\`json
 ` + JSON.stringify(auditEntry, null, 2) + "\n```\n</details>";
@@ -31307,7 +31307,7 @@ async function assignToCodingAgent(octokit, ref, instructions) {
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `## \u{1F916} Assigned to Copilot Coding Agent
+    body: `## \u2728 Assigned to Copilot Coding Agent
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 
@@ -33286,7 +33286,7 @@ This issue was created from research report #${issue.number}. Implement accordin
           core3.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
           core3.warning(`Unable to generate sub-issues for research report`);
-          await createComment(octokit, ref, `## \u{1F916} AI Triage Summary
+          await createComment(octokit, ref, `## \u2728 AI Triage Summary
 
 **Classification:** ${validated.classification}
 **Summary:** ${validated.summary}
@@ -33303,7 +33303,7 @@ This research report contains actionable recommendations but I was unable to bre
         break;
       case "human-review":
       default:
-        const comment2 = `## \u{1F916} AI Triage Summary
+        const comment2 = `## \u2728 AI Triage Summary
 
 **Classification:** ${validated.classification}
 **Priority:** ${validated.priority}

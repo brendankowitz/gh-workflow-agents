@@ -452,7 +452,7 @@ This issue was created from research report #${issue.number}. Implement accordin
           core.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
           core.warning(`Unable to generate sub-issues for research report`);
-          await createComment(octokit, ref, `## 🤖 AI Triage Summary
+          await createComment(octokit, ref, `## ✨ AI Triage Summary
 
 **Classification:** ${validated.classification}
 **Summary:** ${validated.summary}
@@ -471,7 +471,7 @@ This research report contains actionable recommendations but I was unable to bre
       case 'human-review':
       default:
         // Needs human review - post summary comment
-        const comment = `## 🤖 AI Triage Summary
+        const comment = `## ✨ AI Triage Summary
 
 **Classification:** ${validated.classification}
 **Priority:** ${validated.priority}

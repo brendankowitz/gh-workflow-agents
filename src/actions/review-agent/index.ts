@@ -518,7 +518,7 @@ function mapAssessmentToEvent(result: ReviewResult): 'APPROVE' | 'REQUEST_CHANGE
  * Builds the review comment body with structured sections
  */
 function buildReviewComment(result: ReviewResult): string {
-  const sections: string[] = ['## 🤖 AI Code Review\n'];
+  const sections: string[] = ['## ✨ AI Code Review\n'];
 
   // Overview/Summary
   sections.push('### Overview\n');

@@ -30943,7 +30943,7 @@ async function createComment(octokit, ref, body) {
   return response.data.id;
 }
 async function logAgentDecision(octokit, ref, auditEntry) {
-  const comment = `<details><summary>\u{1F916} Agent Decision Log</summary>
+  const comment = `<details><summary>\u2728 Agent Decision Log</summary>
 
 \`\`\`json
 ` + JSON.stringify(auditEntry, null, 2) + "\n```\n</details>";

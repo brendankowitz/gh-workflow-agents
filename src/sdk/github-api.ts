@@ -123,7 +123,7 @@ export async function logAgentDecision(
   auditEntry: AgentAuditEntry
 ): Promise<void> {
   const comment =
-    `<details><summary>🤖 Agent Decision Log</summary>\n\n` +
+    `<details><summary>✨ Agent Decision Log</summary>\n\n` +
     '```json\n' +
     JSON.stringify(auditEntry, null, 2) +
     '\n```\n</details>';
@@ -442,7 +442,7 @@ export async function assignToCodingAgent(
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `## 🤖 Assigned to Copilot Coding Agent
+    body: `## ✨ Assigned to Copilot Coding Agent
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 
