@@ -266,9 +266,26 @@ export async function createPullRequestReview(
       comments,
     });
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message.toLowerCase() : '';
+
+    // Handle "Can not approve your own pull request" - retry as COMMENT
+    // This happens when the bot created the PR and tries to approve it
+    if (event === 'APPROVE' && errorMsg.includes('approve your own')) {
+      console.log('Cannot approve own PR, retrying as COMMENT...');
+      await octokit.rest.pulls.createReview({
+        owner: ref.owner,
+        repo: ref.repo,
+        pull_number: ref.pullNumber,
+        commit_id,
+        event: 'COMMENT',
+        body: body + '\n\n*Note: Auto-approval not possible for bot-created PRs.*',
+        comments,
+      });
+      return;
+    }
+
     // If inline comments fail (e.g., "Line could not be resolved"), retry without them
     // This happens when AI suggests line numbers not in the diff
-    const errorMsg = error instanceof Error ? error.message.toLowerCase() : '';
     const isLineError = errorMsg.includes('line') || errorMsg.includes('could not be resolved');
 
     if (comments && comments.length > 0 && isLineError) {

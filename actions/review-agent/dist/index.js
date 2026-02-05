@@ -31253,6 +31253,19 @@ async function createPullRequestReview(octokit, ref, event, body, comments, comm
     });
   } catch (error3) {
     const errorMsg = error3 instanceof Error ? error3.message.toLowerCase() : "";
+    if (event === "APPROVE" && errorMsg.includes("approve your own")) {
+      console.log("Cannot approve own PR, retrying as COMMENT...");
+      await octokit.rest.pulls.createReview({
+        owner: ref.owner,
+        repo: ref.repo,
+        pull_number: ref.pullNumber,
+        commit_id,
+        event: "COMMENT",
+        body: body + "\n\n*Note: Auto-approval not possible for bot-created PRs.*",
+        comments
+      });
+      return;
+    }
     const isLineError = errorMsg.includes("line") || errorMsg.includes("could not be resolved");
     if (comments && comments.length > 0 && isLineError) {
       console.log("Inline comments failed, retrying without them and adding to body...");
