@@ -34,6 +34,8 @@ import {
   parseAgentResponse,
   stopCopilotClient,
   hasCopilotAuth,
+  hasAppAuth,
+  getOctokitWithAppFallback,
   type PullRequestRef,
 } from '../../sdk/index.js';
 
@@ -83,6 +85,14 @@ export async function run(): Promise<void> {
     // Create octokit early (needed for workflow_dispatch PR fetch)
     const octokit = createOctokit(config.githubToken);
 
+    // Create a separate octokit for posting reviews - prefer GitHub App if available
+    // This allows reviews from a different identity (e.g., ignixa-bot[bot])
+    // so the review agent can APPROVE PRs created by the coding agent
+    const { octokit: reviewOctokit, isAppAuth } = await getOctokitWithAppFallback(config.githubToken);
+    if (isAppAuth) {
+      core.info('Reviews will be posted as GitHub App (can approve bot PRs)');
+    }
+
     // Get PR data (may fetch via API for workflow_dispatch)
     const pr = await getPRFromContext(octokit);
     if (!pr) {
@@ -106,7 +116,7 @@ export async function run(): Promise<void> {
     const isDependabot = await isDependabotPR(octokit, ref);
     if (isDependabot && config.autoApproveDependabot) {
       core.info('Dependabot PR detected - applying lighter review');
-      await handleDependabotPR(octokit, ref, config);
+      await handleDependabotPR(octokit, reviewOctokit, ref, config);
       return;
     }
 
@@ -174,10 +184,10 @@ export async function run(): Promise<void> {
     // Build inline comments
     const inlineComments = buildInlineComments(validated);
 
-    // Post the review
+    // Post the review (using App-authenticated octokit if available)
     core.info(`Posting review with assessment: ${validated.overallAssessment}`);
     await createPullRequestReview(
-      octokit,
+      reviewOctokit,
       ref,
       event,
       reviewBody,
@@ -314,6 +324,7 @@ async function getPRFromContext(
  */
 async function handleDependabotPR(
   octokit: ReturnType<typeof createOctokit>,
+  reviewOctokit: ReturnType<typeof createOctokit>,
   ref: PullRequestRef,
   config: ReviewConfig
 ): Promise<void> {
@@ -336,7 +347,7 @@ async function handleDependabotPR(
   if (onlyPackageFiles) {
     core.info('Dependabot PR with only package file changes - auto-approving');
     await createPullRequestReview(
-      octokit,
+      reviewOctokit,
       ref,
       'APPROVE',
       '✅ Automated approval for Dependabot dependency update.\n\n*This PR only modifies package files and was auto-approved by the GH-Agency Review Agent.*'
@@ -344,7 +355,7 @@ async function handleDependabotPR(
   } else {
     core.info('Dependabot PR with code changes - requesting human review');
     await createPullRequestReview(
-      octokit,
+      reviewOctokit,
       ref,
       'COMMENT',
       '⚠️ This Dependabot PR includes changes beyond package files. Human review recommended.\n\n*GH-Agency Review Agent*'

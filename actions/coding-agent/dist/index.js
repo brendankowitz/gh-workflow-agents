@@ -17587,12 +17587,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info3 = this._prepareRequest(verb, parsedUrl, headers);
+          let info4 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info3, data);
+            response = yield this.requestRaw(info4, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17602,7 +17602,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info3, data);
+                return authenticationHandler.handleAuthentication(this, info4, data);
               } else {
                 return response;
               }
@@ -17625,8 +17625,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info3 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info3, data);
+              info4 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info4, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17655,7 +17655,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info3, data) {
+      requestRaw(info4, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17667,7 +17667,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info3, data, callbackForResult);
+            this.requestRawWithCallback(info4, data, callbackForResult);
           });
         });
       }
@@ -17677,12 +17677,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info3, data, onResult) {
+      requestRawWithCallback(info4, data, onResult) {
         if (typeof data === "string") {
-          if (!info3.options.headers) {
-            info3.options.headers = {};
+          if (!info4.options.headers) {
+            info4.options.headers = {};
           }
-          info3.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info4.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17691,7 +17691,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info3.httpModule.request(info3.options, (msg) => {
+        const req = info4.httpModule.request(info4.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17703,7 +17703,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info3.options.path}`));
+          handleResult(new Error(`Request timeout: ${info4.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17739,27 +17739,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info3 = {};
-        info3.parsedUrl = requestUrl;
-        const usingSsl = info3.parsedUrl.protocol === "https:";
-        info3.httpModule = usingSsl ? https : http;
+        const info4 = {};
+        info4.parsedUrl = requestUrl;
+        const usingSsl = info4.parsedUrl.protocol === "https:";
+        info4.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info3.options = {};
-        info3.options.host = info3.parsedUrl.hostname;
-        info3.options.port = info3.parsedUrl.port ? parseInt(info3.parsedUrl.port) : defaultPort;
-        info3.options.path = (info3.parsedUrl.pathname || "") + (info3.parsedUrl.search || "");
-        info3.options.method = method;
-        info3.options.headers = this._mergeHeaders(headers);
+        info4.options = {};
+        info4.options.host = info4.parsedUrl.hostname;
+        info4.options.port = info4.parsedUrl.port ? parseInt(info4.parsedUrl.port) : defaultPort;
+        info4.options.path = (info4.parsedUrl.pathname || "") + (info4.parsedUrl.search || "");
+        info4.options.method = method;
+        info4.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info3.options.headers["user-agent"] = this.userAgent;
+          info4.options.headers["user-agent"] = this.userAgent;
         }
-        info3.options.agent = this._getAgent(info3.parsedUrl);
+        info4.options.agent = this._getAgent(info4.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info3.options);
+            handler2.prepareRequest(info4.options);
           }
         }
-        return info3;
+        return info4;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19741,18 +19741,18 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.error = error3;
-    function warning3(message, properties = {}) {
+    function warning4(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports.warning = warning3;
+    exports.warning = warning4;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.notice = notice;
-    function info3(message) {
+    function info4(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports.info = info3;
+    exports.info = info4;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -25074,8 +25074,8 @@ var require_messageReader = __commonJS({
       get onPartialMessage() {
         return this.partialMessageEmitter.event;
       }
-      firePartialMessage(info3) {
-        this.partialMessageEmitter.fire(info3);
+      firePartialMessage(info4) {
+        this.partialMessageEmitter.fire(info4);
       }
       asError(error3) {
         if (error3 instanceof Error) {
@@ -27236,7 +27236,7 @@ var require_node = __commonJS({
 });
 
 // dist/actions/coding-agent/index.js
-var core2 = __toESM(require_core(), 1);
+var core3 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/sanitizer.js
@@ -32618,6 +32618,9 @@ function parseAgentResponse(response) {
   }
 }
 
+// dist/sdk/github-app.js
+var core2 = __toESM(require_core(), 1);
+
 // dist/actions/coding-agent/index.js
 var VALID_BRANCH_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 var UNSAFE_PATH_PATTERNS = [
@@ -32659,9 +32662,9 @@ async function run() {
   let failed = false;
   process.on("uncaughtException", (error3) => {
     if (error3.message?.includes("stream") || error3.message?.includes("ERR_STREAM_DESTROYED")) {
-      core2.warning(`Suppressed async SDK error: ${error3.message}`);
+      core3.warning(`Suppressed async SDK error: ${error3.message}`);
     } else {
-      core2.error(`Uncaught exception: ${error3.message}`);
+      core3.error(`Uncaught exception: ${error3.message}`);
       process.exit(1);
     }
   });
@@ -32669,7 +32672,7 @@ async function run() {
     const config = getConfig();
     const actor = github.context.actor;
     if (isBot(actor)) {
-      core2.info(`Skipping coding for bot actor: ${actor}`);
+      core3.info(`Skipping coding for bot actor: ${actor}`);
       return;
     }
     const circuitBreaker = createCircuitBreakerContext();
@@ -32677,11 +32680,11 @@ async function run() {
     const octokit = createOctokit(config.githubToken);
     const task = await getTaskFromContext(octokit);
     if (!task) {
-      core2.setFailed("Unable to determine coding task from context");
+      core3.setFailed("Unable to determine coding task from context");
       return;
     }
     if (hasStopCommand(task.content)) {
-      core2.info("Stop command detected, skipping coding");
+      core3.info("Stop command detected, skipping coding");
       return;
     }
     if (task.type === "pr-feedback" && task.prNumber) {
@@ -32700,13 +32703,13 @@ The coding agent has attempted to address review feedback ${feedbackIterations} 
 If you still need changes, please:
 1. Make the changes manually, or
 2. Remove the \`agent-coded\` label, make adjustments, and re-apply the label to reset the counter.`);
-        core2.setFailed(`Circuit breaker: Maximum feedback iterations (${maxFeedbackIterations}) reached`);
+        core3.setFailed(`Circuit breaker: Maximum feedback iterations (${maxFeedbackIterations}) reached`);
         return;
       }
-      core2.info(`Feedback iteration ${feedbackIterations + 1}/${maxFeedbackIterations}`);
+      core3.info(`Feedback iteration ${feedbackIterations + 1}/${maxFeedbackIterations}`);
     }
     if (!hasCopilotAuth()) {
-      core2.setFailed("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN with a fine-grained PAT that has Copilot access.");
+      core3.setFailed("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN with a fine-grained PAT that has Copilot access.");
       return;
     }
     if (task.type === "issue" && task.issueNumber) {
@@ -32715,44 +32718,44 @@ If you still need changes, please:
         repo: github.context.repo.repo,
         issueNumber: task.issueNumber
       };
-      core2.info(`Picking up issue #${task.issueNumber}...`);
+      core3.info(`Picking up issue #${task.issueNumber}...`);
       await Promise.all([
         removeLabels(octokit, issueRef, ["ready-for-agent"]),
         addLabels(octokit, issueRef, ["assigned-to-agent"]),
         createComment(octokit, issueRef, "\u{1F916} Coding agent has picked up this issue and is working on it...\n\nI will analyze the requirements, implement the changes, and create a pull request.")
       ]);
     }
-    core2.info("Loading repository context...");
+    core3.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, github.context.repo.owner, github.context.repo.repo);
     const contextSection = formatContextForPrompt(repoContext);
-    core2.info("Phase 1: Planning task...");
+    core3.info("Phase 1: Planning task...");
     const plan = await planTask(task, contextSection, config.model);
-    core2.info(`Plan: ${plan.summary}`);
-    core2.info(`Files to modify: ${plan.files.join(", ")}`);
-    core2.info(`Complexity: ${plan.estimatedComplexity}`);
+    core3.info(`Plan: ${plan.summary}`);
+    core3.info(`Files to modify: ${plan.files.join(", ")}`);
+    core3.info(`Complexity: ${plan.estimatedComplexity}`);
     if (config.dryRun) {
-      core2.info("Dry run mode - stopping before execution");
-      core2.setOutput("status", "dry-run");
-      core2.setOutput("plan", JSON.stringify(plan));
+      core3.info("Dry run mode - stopping before execution");
+      core3.setOutput("status", "dry-run");
+      core3.setOutput("plan", JSON.stringify(plan));
       return;
     }
     const SAFETY_MAX_ITERATIONS = 50;
-    core2.info("Phase 2-3: Starting unified code generation loop...");
-    core2.info(`Safety limit: ${SAFETY_MAX_ITERATIONS} iterations`);
+    core3.info("Phase 2-3: Starting unified code generation loop...");
+    core3.info(`Safety limit: ${SAFETY_MAX_ITERATIONS} iterations`);
     const changes = await executeUnifiedLoop(plan, SAFETY_MAX_ITERATIONS, contextSection, config.model);
     if (!changes || changes.files.length === 0) {
-      core2.setFailed("Failed to generate any code changes.");
+      core3.setFailed("Failed to generate any code changes.");
       return;
     }
-    core2.info(`Final result: ${changes.files.length} files generated`);
-    core2.info("Phase 4: Committing and pushing changes...");
+    core3.info(`Final result: ${changes.files.length} files generated`);
+    core3.info("Phase 4: Committing and pushing changes...");
     const commitResult = await commitAndPush(changes, task, config);
-    core2.info(`Committed to branch: ${commitResult.branchName}`);
-    core2.info("Phase 5: Managing pull request...");
+    core3.info(`Committed to branch: ${commitResult.branchName}`);
+    core3.info("Phase 5: Managing pull request...");
     const prResult = await managePR(commitResult, task, changes, octokit, config);
-    core2.info(`PR ${prResult.status}: ${prResult.prUrl}`);
+    core3.info(`PR ${prResult.status}: ${prResult.prUrl}`);
     if (prResult.status === "failed") {
-      core2.setFailed(`Failed to create/update PR: ${prResult.prUrl}`);
+      core3.setFailed(`Failed to create/update PR: ${prResult.prUrl}`);
       failed = true;
       return;
     }
@@ -32772,17 +32775,17 @@ ${changes.summary}
 Please review: ${prResult.prUrl}`)
       ]);
     }
-    core2.setOutput("branch-name", commitResult.branchName);
-    core2.setOutput("pr-number", prResult.prNumber);
-    core2.setOutput("changes-summary", changes.summary);
-    core2.setOutput("status", "success");
-    core2.info("Coding complete");
+    core3.setOutput("branch-name", commitResult.branchName);
+    core3.setOutput("pr-number", prResult.prNumber);
+    core3.setOutput("changes-summary", changes.summary);
+    core3.setOutput("status", "success");
+    core3.info("Coding complete");
   } catch (error3) {
     failed = true;
     if (error3 instanceof Error) {
-      core2.setFailed(error3.message);
+      core3.setFailed(error3.message);
     } else {
-      core2.setFailed("An unknown error occurred");
+      core3.setFailed("An unknown error occurred");
     }
   } finally {
     try {
@@ -32793,22 +32796,22 @@ Please review: ${prResult.prUrl}`)
   }
 }
 function getConfig() {
-  const copilotToken = core2.getInput("copilot-token");
+  const copilotToken = core3.getInput("copilot-token");
   if (copilotToken) {
     process.env.COPILOT_GITHUB_TOKEN = copilotToken;
   }
   return {
-    githubToken: core2.getInput("github-token", { required: true }),
+    githubToken: core3.getInput("github-token", { required: true }),
     copilotToken: copilotToken || "",
-    model: core2.getInput("model") || "claude-sonnet-4.5",
-    maxIterations: parseInt(core2.getInput("max-iterations") || "5", 10),
-    dryRun: core2.getBooleanInput("dry-run")
+    model: core3.getInput("model") || "claude-sonnet-4.5",
+    maxIterations: parseInt(core3.getInput("max-iterations") || "5", 10),
+    dryRun: core3.getBooleanInput("dry-run")
   };
 }
 async function getTaskFromContext(octokit) {
   const payload = github.context.payload;
   const eventName = github.context.eventName;
-  const issueNumberInput = core2.getInput("issue-number");
+  const issueNumberInput = core3.getInput("issue-number");
   if (issueNumberInput) {
     const issueNumber = parseInt(issueNumberInput, 10);
     if (!isNaN(issueNumber)) {
@@ -32826,11 +32829,11 @@ async function getTaskFromContext(octokit) {
 ${issue.body || ""}`
         };
       } catch (error3) {
-        core2.warning(`Failed to fetch issue #${issueNumberInput}: ${error3 instanceof Error ? error3.message : String(error3)}`);
+        core3.warning(`Failed to fetch issue #${issueNumberInput}: ${error3 instanceof Error ? error3.message : String(error3)}`);
       }
     }
   }
-  const prNumberInput = core2.getInput("pr-number");
+  const prNumberInput = core3.getInput("pr-number");
   if (prNumberInput) {
     const prNumber = parseInt(prNumberInput, 10);
     if (!isNaN(prNumber)) {
@@ -32856,7 +32859,7 @@ ${issue.body || ""}`
             });
             reviewComments = comments.filter((c) => c.pull_request_review_id === latestChangesRequested.id).map((c) => `**${c.path}:${c.line}** - ${c.body}`).filter((c) => c.trim().length > 0);
           } catch (error3) {
-            core2.warning(`Failed to fetch review comments: ${error3 instanceof Error ? error3.message : String(error3)}`);
+            core3.warning(`Failed to fetch review comments: ${error3 instanceof Error ? error3.message : String(error3)}`);
           }
         }
         let fullFeedback = latestChangesRequested?.body || "";
@@ -32865,7 +32868,7 @@ ${issue.body || ""}`
         }
         const branchValidation = validateBranchName(pr.head.ref);
         if (!branchValidation.valid) {
-          core2.warning(`Invalid branch name from PR: ${pr.head.ref}`);
+          core3.warning(`Invalid branch name from PR: ${pr.head.ref}`);
         }
         return {
           type: "pr-feedback",
@@ -32878,7 +32881,7 @@ ${pr.body || ""}`, "pr-content").sanitized,
           // Store sanitized branch name
         };
       } catch (error3) {
-        core2.warning(`Failed to fetch PR #${prNumberInput}: ${error3 instanceof Error ? error3.message : String(error3)}`);
+        core3.warning(`Failed to fetch PR #${prNumberInput}: ${error3 instanceof Error ? error3.message : String(error3)}`);
       }
     }
   }
@@ -32907,7 +32910,7 @@ ${payload.issue.body || ""}`, "issue-content").sanitized
         });
         reviewComments = comments.filter((c) => c.pull_request_review_id === payload.review.id).map((c) => `**${c.path}:${c.line}** - ${c.body}`).filter((c) => c.trim().length > 0);
       } catch (error3) {
-        core2.warning(`Failed to fetch review comments: ${error3 instanceof Error ? error3.message : String(error3)}`);
+        core3.warning(`Failed to fetch review comments: ${error3 instanceof Error ? error3.message : String(error3)}`);
       }
       let fullFeedback = payload.review.body || "";
       if (reviewComments.length > 0) {
@@ -32915,7 +32918,7 @@ ${payload.issue.body || ""}`, "issue-content").sanitized
       }
       const branchValidation = validateBranchName(payload.pull_request.head.ref);
       if (!branchValidation.valid) {
-        core2.warning(`Invalid branch name from PR: ${payload.pull_request.head.ref}`);
+        core3.warning(`Invalid branch name from PR: ${payload.pull_request.head.ref}`);
       }
       return {
         type: "pr-feedback",
@@ -32943,15 +32946,15 @@ async function checkFeedbackLoopIterations(octokit, prNumber) {
     const feedbackComments = comments.filter((comment) => comment.user?.login === botName && comment.body?.includes("\u{1F916} Updates Applied"));
     return feedbackComments.length;
   } catch (error3) {
-    core2.warning(`Failed to check feedback iterations: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    core3.warning(`Failed to check feedback iterations: ${error3 instanceof Error ? error3.message : String(error3)}`);
     return 0;
   }
 }
 async function planTask(task, contextSection, model) {
-  core2.info("Planning task with AI analysis...");
-  core2.info(`Task type: ${task.type}`);
+  core3.info("Planning task with AI analysis...");
+  core3.info(`Task type: ${task.type}`);
   if (!hasCopilotAuth()) {
-    core2.warning("No valid Copilot authentication found. Falling back to basic planning...");
+    core3.warning("No valid Copilot authentication found. Falling back to basic planning...");
     return createFallbackPlan(task);
   }
   const systemPrompt = createCodingPlannerSystemPrompt().replace("{context}", contextSection);
@@ -32959,25 +32962,25 @@ async function planTask(task, contextSection, model) {
   try {
     const response = await sendPrompt(systemPrompt, userPrompt, { model });
     if (response.finishReason === "error" || !response.content) {
-      core2.warning("Copilot SDK returned an error or empty response, falling back to basic planning");
+      core3.warning("Copilot SDK returned an error or empty response, falling back to basic planning");
       return createFallbackPlan(task);
     }
     const parsed = parseAgentResponse(response.content);
     if (!parsed) {
-      core2.warning("Failed to parse Copilot SDK response as JSON, falling back to basic planning");
-      core2.debug(`Raw response: ${response.content}`);
+      core3.warning("Failed to parse Copilot SDK response as JSON, falling back to basic planning");
+      core3.debug(`Raw response: ${response.content}`);
       return createFallbackPlan(task);
     }
     if (!parsed.summary || !parsed.files || !parsed.approach || !parsed.estimatedComplexity) {
-      core2.warning("Incomplete plan received from AI, falling back to basic planning");
+      core3.warning("Incomplete plan received from AI, falling back to basic planning");
       return createFallbackPlan(task);
     }
-    core2.info(`Plan generated: ${parsed.summary}`);
-    core2.info(`Files to modify: ${parsed.files.length} file(s)`);
-    core2.info(`Estimated complexity: ${parsed.estimatedComplexity}`);
+    core3.info(`Plan generated: ${parsed.summary}`);
+    core3.info(`Files to modify: ${parsed.files.length} file(s)`);
+    core3.info(`Estimated complexity: ${parsed.estimatedComplexity}`);
     return parsed;
   } catch (error3) {
-    core2.warning(`Error during planning: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    core3.warning(`Error during planning: ${error3 instanceof Error ? error3.message : String(error3)}`);
     return createFallbackPlan(task);
   }
 }
@@ -33095,12 +33098,12 @@ Respond with valid JSON only.
   }
 }
 async function executeUnifiedLoop(plan, safetyMaxIterations, contextSection, model) {
-  core2.info("Starting unified code generation loop...");
-  core2.info(`Plan: ${plan.summary}`);
-  core2.info(`Files to modify: ${plan.files.join(", ")}`);
-  core2.info(`Safety max iterations: ${safetyMaxIterations}`);
+  core3.info("Starting unified code generation loop...");
+  core3.info(`Plan: ${plan.summary}`);
+  core3.info(`Files to modify: ${plan.files.join(", ")}`);
+  core3.info(`Safety max iterations: ${safetyMaxIterations}`);
   if (!hasCopilotAuth()) {
-    core2.warning("No valid Copilot authentication found. Cannot generate code without AI.");
+    core3.warning("No valid Copilot authentication found. Cannot generate code without AI.");
     return {
       files: [],
       summary: "Code generation skipped - no Copilot authentication available",
@@ -33114,30 +33117,30 @@ async function executeUnifiedLoop(plan, safetyMaxIterations, contextSection, mod
   const systemPrompt = createCodeGenerationSystemPrompt().replace("{context}", contextSection);
   while (iteration < safetyMaxIterations) {
     iteration++;
-    core2.info(`
+    core3.info(`
 ${"=".repeat(60)}`);
-    core2.info(`Iteration ${iteration}/${safetyMaxIterations}`);
-    core2.info(`${"=".repeat(60)}`);
+    core3.info(`Iteration ${iteration}/${safetyMaxIterations}`);
+    core3.info(`${"=".repeat(60)}`);
     try {
       const userPrompt = buildUnifiedPrompt(plan, Array.from(accumulatedChanges.values()), iteration, lastReasoning, selfReviewIssues);
-      core2.info("Generating code changes...");
+      core3.info("Generating code changes...");
       const response = await sendPrompt(systemPrompt, userPrompt, { model });
       if (response.finishReason === "error" || !response.content) {
-        core2.warning(`Iteration ${iteration}: Copilot SDK returned an error or empty response`);
+        core3.warning(`Iteration ${iteration}: Copilot SDK returned an error or empty response`);
         continue;
       }
       const parsed = parseAgentResponse(response.content);
       if (!parsed) {
-        core2.warning(`Iteration ${iteration}: Failed to parse response as JSON`);
+        core3.warning(`Iteration ${iteration}: Failed to parse response as JSON`);
         continue;
       }
       if (!parsed.files || !Array.isArray(parsed.files)) {
-        core2.warning(`Iteration ${iteration}: Invalid response structure`);
+        core3.warning(`Iteration ${iteration}: Invalid response structure`);
         continue;
       }
       if (parsed.reasoning) {
         lastReasoning = parsed.reasoning;
-        core2.info(`Reasoning: ${parsed.reasoning}`);
+        core3.info(`Reasoning: ${parsed.reasoning}`);
       }
       let newChanges = 0;
       for (const file of parsed.files) {
@@ -33145,7 +33148,7 @@ ${"=".repeat(60)}`);
           continue;
         const pathValidation = validateFilePath(file.path);
         if (!pathValidation.valid) {
-          core2.warning(`SECURITY: Rejecting unsafe path "${file.path}"`);
+          core3.warning(`SECURITY: Rejecting unsafe path "${file.path}"`);
           continue;
         }
         const isNew = !accumulatedChanges.has(file.path);
@@ -33156,41 +33159,41 @@ ${"=".repeat(60)}`);
         });
         if (isNew) {
           newChanges++;
-          core2.info(`  ${file.operation}: ${file.path}`);
+          core3.info(`  ${file.operation}: ${file.path}`);
         } else {
-          core2.info(`  updated: ${file.path}`);
+          core3.info(`  updated: ${file.path}`);
         }
       }
-      core2.info(`Iteration ${iteration}: ${newChanges} new file(s), ${accumulatedChanges.size} total`);
+      core3.info(`Iteration ${iteration}: ${newChanges} new file(s), ${accumulatedChanges.size} total`);
       if (parsed.isComplete) {
-        core2.info("AI indicates implementation is complete. Running self-review...");
+        core3.info("AI indicates implementation is complete. Running self-review...");
         const currentChanges = buildCodeChanges(accumulatedChanges, plan.summary, iteration, true);
         const review = await selfReview(currentChanges, contextSection, model);
         if (review.passed) {
-          core2.info("\u2705 Self-review PASSED! Implementation complete.");
+          core3.info("\u2705 Self-review PASSED! Implementation complete.");
           return currentChanges;
         }
-        core2.warning("Self-review found issues to address:");
-        review.issues.forEach((issue) => core2.warning(`  - ${issue}`));
+        core3.warning("Self-review found issues to address:");
+        review.issues.forEach((issue) => core3.warning(`  - ${issue}`));
         selfReviewIssues = review.issues;
-        core2.info("Continuing generation to fix issues...");
+        core3.info("Continuing generation to fix issues...");
       } else if (parsed.nextSteps && parsed.nextSteps.length > 0) {
-        core2.info("Next steps from AI:");
-        parsed.nextSteps.forEach((step, idx) => core2.info(`  ${idx + 1}. ${step}`));
+        core3.info("Next steps from AI:");
+        parsed.nextSteps.forEach((step, idx) => core3.info(`  ${idx + 1}. ${step}`));
         selfReviewIssues = [];
       }
     } catch (error3) {
-      core2.warning(`Iteration ${iteration} error: ${error3 instanceof Error ? error3.message : String(error3)}`);
+      core3.warning(`Iteration ${iteration} error: ${error3 instanceof Error ? error3.message : String(error3)}`);
     }
   }
-  core2.warning(`Reached safety limit of ${safetyMaxIterations} iterations`);
+  core3.warning(`Reached safety limit of ${safetyMaxIterations} iterations`);
   const finalChanges = buildCodeChanges(accumulatedChanges, plan.summary, iteration, false);
   if (finalChanges.files.length > 0) {
-    core2.info("Running final self-review on partial implementation...");
+    core3.info("Running final self-review on partial implementation...");
     const review = await selfReview(finalChanges, contextSection, model);
     if (!review.passed) {
-      core2.warning("Final self-review found issues:");
-      review.issues.forEach((issue) => core2.warning(`  - ${issue}`));
+      core3.warning("Final self-review found issues:");
+      review.issues.forEach((issue) => core3.warning(`  - ${issue}`));
     }
   }
   return finalChanges;
@@ -33353,39 +33356,39 @@ function generateChangesSummary(files, planSummary, iterations, isComplete) {
 *${files.length} file(s) changed across ${iterations} iteration(s). Status: ${status}*`;
 }
 async function selfReview(changes, contextSection, model) {
-  core2.info("Self-reviewing generated code...");
-  core2.info(`Files to review: ${changes.files.length}`);
+  core3.info("Self-reviewing generated code...");
+  core3.info(`Files to review: ${changes.files.length}`);
   if (!hasCopilotAuth()) {
-    core2.warning("No valid Copilot authentication found. Using fallback pattern-based review...");
+    core3.warning("No valid Copilot authentication found. Using fallback pattern-based review...");
     return createFallbackSelfReviewResult(changes);
   }
   const systemPrompt = createSelfReviewSystemPrompt().replace("{context}", contextSection);
   const userPrompt = buildSelfReviewPrompt(changes);
   try {
-    core2.info(`Self-reviewing with Copilot SDK (model: ${model})...`);
+    core3.info(`Self-reviewing with Copilot SDK (model: ${model})...`);
     const response = await sendPrompt(systemPrompt, userPrompt, { model });
     if (response.finishReason === "error" || !response.content) {
-      core2.warning("Copilot SDK returned an error, falling back to pattern-based review");
+      core3.warning("Copilot SDK returned an error, falling back to pattern-based review");
       return createFallbackSelfReviewResult(changes);
     }
     const parsed = parseAgentResponse(response.content);
     if (!parsed) {
-      core2.warning("Failed to parse Copilot SDK response, falling back to pattern-based review");
-      core2.debug(`Raw response: ${response.content}`);
+      core3.warning("Failed to parse Copilot SDK response, falling back to pattern-based review");
+      core3.debug(`Raw response: ${response.content}`);
       return createFallbackSelfReviewResult(changes);
     }
-    core2.info(`Self-review complete: ${parsed.passed ? "PASSED" : "FAILED"}`);
+    core3.info(`Self-review complete: ${parsed.passed ? "PASSED" : "FAILED"}`);
     if (parsed.issues.length > 0) {
-      core2.info(`Issues found: ${parsed.issues.length}`);
-      parsed.issues.forEach((issue) => core2.info(`  - ${issue}`));
+      core3.info(`Issues found: ${parsed.issues.length}`);
+      parsed.issues.forEach((issue) => core3.info(`  - ${issue}`));
     }
     if (parsed.suggestions.length > 0) {
-      core2.info(`Suggestions: ${parsed.suggestions.length}`);
-      parsed.suggestions.forEach((suggestion) => core2.info(`  - ${suggestion}`));
+      core3.info(`Suggestions: ${parsed.suggestions.length}`);
+      parsed.suggestions.forEach((suggestion) => core3.info(`  - ${suggestion}`));
     }
     return parsed;
   } catch (error3) {
-    core2.warning(`Error during self-review: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    core3.warning(`Error during self-review: ${error3 instanceof Error ? error3.message : String(error3)}`);
     return createFallbackSelfReviewResult(changes);
   }
 }
@@ -33605,14 +33608,14 @@ function createFallbackSelfReviewResult(changes) {
     suggestions.push("No test files detected - consider adding tests for new functionality");
   }
   const passed = issues.length === 0;
-  core2.info(`Fallback review complete: ${passed ? "PASSED" : "FAILED"}`);
+  core3.info(`Fallback review complete: ${passed ? "PASSED" : "FAILED"}`);
   if (issues.length > 0) {
-    core2.info(`Issues found: ${issues.length}`);
-    issues.forEach((issue) => core2.info(`  - ${issue}`));
+    core3.info(`Issues found: ${issues.length}`);
+    issues.forEach((issue) => core3.info(`  - ${issue}`));
   }
   if (suggestions.length > 0) {
-    core2.info(`Suggestions: ${suggestions.length}`);
-    suggestions.forEach((suggestion) => core2.info(`  - ${suggestion}`));
+    core3.info(`Suggestions: ${suggestions.length}`);
+    suggestions.forEach((suggestion) => core3.info(`  - ${suggestion}`));
   }
   return {
     passed,
@@ -33621,12 +33624,12 @@ function createFallbackSelfReviewResult(changes) {
   };
 }
 async function commitAndPush(changes, task, config) {
-  core2.info("Committing and pushing changes via GitHub API...");
-  core2.info(`Files to commit: ${changes.files.length}`);
+  core3.info("Committing and pushing changes via GitHub API...");
+  core3.info(`Files to commit: ${changes.files.length}`);
   const octokit = createOctokit(config.githubToken);
   const { owner, repo } = github.context.repo;
   if (config.dryRun) {
-    core2.info("[DRY RUN] Would commit and push changes");
+    core3.info("[DRY RUN] Would commit and push changes");
     const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
     const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
     return {
@@ -33637,7 +33640,7 @@ async function commitAndPush(changes, task, config) {
     };
   }
   try {
-    core2.info("Getting repository information...");
+    core3.info("Getting repository information...");
     const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
     const defaultBranch = repoData.default_branch;
     const { data: refData } = await octokit.rest.git.getRef({
@@ -33646,10 +33649,10 @@ async function commitAndPush(changes, task, config) {
       ref: `heads/${defaultBranch}`
     });
     const baseSha = refData.object.sha;
-    core2.info(`Base branch: ${defaultBranch} (${baseSha.substring(0, 7)})`);
+    core3.info(`Base branch: ${defaultBranch} (${baseSha.substring(0, 7)})`);
     const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
     const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
-    core2.info(`Target branch: ${branchName}`);
+    core3.info(`Target branch: ${branchName}`);
     let branchExists = false;
     let branchSha = baseSha;
     try {
@@ -33660,9 +33663,9 @@ async function commitAndPush(changes, task, config) {
       });
       branchSha = existingRef.object.sha;
       branchExists = true;
-      core2.info(`Branch already exists, will update from ${branchSha.substring(0, 7)}`);
+      core3.info(`Branch already exists, will update from ${branchSha.substring(0, 7)}`);
     } catch (error3) {
-      core2.info("Branch does not exist, will create new branch");
+      core3.info("Branch does not exist, will create new branch");
     }
     const { data: baseCommit } = await octokit.rest.git.getCommit({
       owner,
@@ -33670,12 +33673,12 @@ async function commitAndPush(changes, task, config) {
       commit_sha: branchSha
     });
     const baseTreeSha = baseCommit.tree.sha;
-    core2.info("Building git tree with file changes...");
+    core3.info("Building git tree with file changes...");
     const tree = [];
     let hasNonDeleteChanges = false;
     for (const file of changes.files) {
       if (file.operation === "delete") {
-        core2.info(`  Deleting: ${file.path}`);
+        core3.info(`  Deleting: ${file.path}`);
         tree.push({
           path: file.path,
           mode: "100644",
@@ -33686,7 +33689,7 @@ async function commitAndPush(changes, task, config) {
         continue;
       }
       hasNonDeleteChanges = true;
-      core2.info(`  ${file.operation === "create" ? "Creating" : "Modifying"}: ${file.path}`);
+      core3.info(`  ${file.operation === "create" ? "Creating" : "Modifying"}: ${file.path}`);
       const { data: blob } = await octokit.rest.git.createBlob({
         owner,
         repo,
@@ -33702,14 +33705,14 @@ async function commitAndPush(changes, task, config) {
       });
     }
     if (tree.length === 0) {
-      core2.warning("No files to commit (empty change set)");
+      core3.warning("No files to commit (empty change set)");
       return {
         branchName,
         commitSha: branchSha,
         pushedSuccessfully: false
       };
     }
-    core2.info(`Creating git tree with ${tree.length} file(s)...`);
+    core3.info(`Creating git tree with ${tree.length} file(s)...`);
     const { data: newTree } = await octokit.rest.git.createTree({
       owner,
       repo,
@@ -33722,7 +33725,7 @@ async function commitAndPush(changes, task, config) {
 ${changes.summary}
 
 \u{1F916} Generated by Coding Agent`;
-    core2.info("Creating commit...");
+    core3.info("Creating commit...");
     const { data: newCommit } = await octokit.rest.git.createCommit({
       owner,
       repo,
@@ -33730,9 +33733,9 @@ ${changes.summary}
       tree: newTree.sha,
       parents: [branchSha]
     });
-    core2.info(`Commit created: ${newCommit.sha.substring(0, 7)}`);
+    core3.info(`Commit created: ${newCommit.sha.substring(0, 7)}`);
     if (branchExists) {
-      core2.info(`Updating existing branch ${branchName}...`);
+      core3.info(`Updating existing branch ${branchName}...`);
       await octokit.rest.git.updateRef({
         owner,
         repo,
@@ -33742,7 +33745,7 @@ ${changes.summary}
         // Don't force push
       });
     } else {
-      core2.info(`Creating new branch ${branchName}...`);
+      core3.info(`Creating new branch ${branchName}...`);
       await octokit.rest.git.createRef({
         owner,
         repo,
@@ -33750,14 +33753,14 @@ ${changes.summary}
         sha: newCommit.sha
       });
     }
-    core2.info("Changes successfully committed and pushed");
+    core3.info("Changes successfully committed and pushed");
     return {
       branchName,
       commitSha: newCommit.sha,
       pushedSuccessfully: true
     };
   } catch (error3) {
-    core2.error(`Failed to commit and push changes: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    core3.error(`Failed to commit and push changes: ${error3 instanceof Error ? error3.message : String(error3)}`);
     const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
     const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
     return {
@@ -33768,10 +33771,10 @@ ${changes.summary}
   }
 }
 async function managePR(commitResult, task, changes, octokit, config) {
-  core2.info("Managing pull request...");
-  core2.info(`Branch: ${commitResult.branchName}`);
+  core3.info("Managing pull request...");
+  core3.info(`Branch: ${commitResult.branchName}`);
   if (!commitResult.pushedSuccessfully) {
-    core2.error("Cannot manage PR - commit was not pushed successfully");
+    core3.error("Cannot manage PR - commit was not pushed successfully");
     return {
       prNumber: 0,
       prUrl: "",
@@ -33780,7 +33783,7 @@ async function managePR(commitResult, task, changes, octokit, config) {
   }
   const { owner, repo } = github.context.repo;
   if (config.dryRun) {
-    core2.info("[DRY RUN] Would create or update pull request");
+    core3.info("[DRY RUN] Would create or update pull request");
     return {
       prNumber: 999,
       prUrl: `https://github.com/${owner}/${repo}/pull/999`,
@@ -33790,7 +33793,7 @@ async function managePR(commitResult, task, changes, octokit, config) {
   try {
     const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
     const baseBranch = repoData.default_branch;
-    core2.info("Checking for existing PR...");
+    core3.info("Checking for existing PR...");
     const { data: existingPRs } = await octokit.rest.pulls.list({
       owner,
       repo,
@@ -33802,7 +33805,7 @@ async function managePR(commitResult, task, changes, octokit, config) {
       if (!existingPR) {
         throw new Error("Unexpected: existingPRs[0] is undefined");
       }
-      core2.info(`Found existing PR #${existingPR.number}`);
+      core3.info(`Found existing PR #${existingPR.number}`);
       const { data: comments } = await octokit.rest.issues.listComments({
         owner,
         repo,
@@ -33817,14 +33820,14 @@ async function managePR(commitResult, task, changes, octokit, config) {
         issue_number: existingPR.number,
         body: commentBody
       });
-      core2.info("Added update comment to existing PR");
+      core3.info("Added update comment to existing PR");
       return {
         prNumber: existingPR.number,
         prUrl: existingPR.html_url,
         status: "updated"
       };
     }
-    core2.info("No existing PR found, creating new PR...");
+    core3.info("No existing PR found, creating new PR...");
     const prTitle = buildPRTitle(task);
     const prBody = buildPRBody(task, changes);
     const { data: newPR } = await octokit.rest.pulls.create({
@@ -33835,7 +33838,7 @@ async function managePR(commitResult, task, changes, octokit, config) {
       head: commitResult.branchName,
       base: baseBranch
     });
-    core2.info(`PR created: #${newPR.number}`);
+    core3.info(`PR created: #${newPR.number}`);
     try {
       await octokit.rest.issues.addLabels({
         owner,
@@ -33843,9 +33846,9 @@ async function managePR(commitResult, task, changes, octokit, config) {
         issue_number: newPR.number,
         labels: ["agent-coded"]
       });
-      core2.info("Added agent-coded label to PR");
+      core3.info("Added agent-coded label to PR");
     } catch (error3) {
-      core2.warning(`Failed to add label: ${error3 instanceof Error ? error3.message : String(error3)}`);
+      core3.warning(`Failed to add label: ${error3 instanceof Error ? error3.message : String(error3)}`);
     }
     return {
       prNumber: newPR.number,
@@ -33853,7 +33856,7 @@ async function managePR(commitResult, task, changes, octokit, config) {
       status: "created"
     };
   } catch (error3) {
-    core2.error(`Failed to manage PR: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    core3.error(`Failed to manage PR: ${error3 instanceof Error ? error3.message : String(error3)}`);
     return {
       prNumber: 0,
       prUrl: "",

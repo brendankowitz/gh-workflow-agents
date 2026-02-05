@@ -17587,12 +17587,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info3 = this._prepareRequest(verb, parsedUrl, headers);
+          let info4 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info3, data);
+            response = yield this.requestRaw(info4, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17602,7 +17602,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info3, data);
+                return authenticationHandler.handleAuthentication(this, info4, data);
               } else {
                 return response;
               }
@@ -17625,8 +17625,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info3 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info3, data);
+              info4 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info4, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17655,7 +17655,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info3, data) {
+      requestRaw(info4, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17667,7 +17667,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info3, data, callbackForResult);
+            this.requestRawWithCallback(info4, data, callbackForResult);
           });
         });
       }
@@ -17677,12 +17677,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info3, data, onResult) {
+      requestRawWithCallback(info4, data, onResult) {
         if (typeof data === "string") {
-          if (!info3.options.headers) {
-            info3.options.headers = {};
+          if (!info4.options.headers) {
+            info4.options.headers = {};
           }
-          info3.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info4.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17691,7 +17691,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info3.httpModule.request(info3.options, (msg) => {
+        const req = info4.httpModule.request(info4.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17703,7 +17703,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info3.options.path}`));
+          handleResult(new Error(`Request timeout: ${info4.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17739,27 +17739,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info3 = {};
-        info3.parsedUrl = requestUrl;
-        const usingSsl = info3.parsedUrl.protocol === "https:";
-        info3.httpModule = usingSsl ? https : http;
+        const info4 = {};
+        info4.parsedUrl = requestUrl;
+        const usingSsl = info4.parsedUrl.protocol === "https:";
+        info4.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info3.options = {};
-        info3.options.host = info3.parsedUrl.hostname;
-        info3.options.port = info3.parsedUrl.port ? parseInt(info3.parsedUrl.port) : defaultPort;
-        info3.options.path = (info3.parsedUrl.pathname || "") + (info3.parsedUrl.search || "");
-        info3.options.method = method;
-        info3.options.headers = this._mergeHeaders(headers);
+        info4.options = {};
+        info4.options.host = info4.parsedUrl.hostname;
+        info4.options.port = info4.parsedUrl.port ? parseInt(info4.parsedUrl.port) : defaultPort;
+        info4.options.path = (info4.parsedUrl.pathname || "") + (info4.parsedUrl.search || "");
+        info4.options.method = method;
+        info4.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info3.options.headers["user-agent"] = this.userAgent;
+          info4.options.headers["user-agent"] = this.userAgent;
         }
-        info3.options.agent = this._getAgent(info3.parsedUrl);
+        info4.options.agent = this._getAgent(info4.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info3.options);
+            handler2.prepareRequest(info4.options);
           }
         }
-        return info3;
+        return info4;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19741,18 +19741,18 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.error = error2;
-    function warning3(message, properties = {}) {
+    function warning4(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports.warning = warning3;
+    exports.warning = warning4;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.notice = notice;
-    function info3(message) {
+    function info4(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports.info = info3;
+    exports.info = info4;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -25074,8 +25074,8 @@ var require_messageReader = __commonJS({
       get onPartialMessage() {
         return this.partialMessageEmitter.event;
       }
-      firePartialMessage(info3) {
-        this.partialMessageEmitter.fire(info3);
+      firePartialMessage(info4) {
+        this.partialMessageEmitter.fire(info4);
       }
       asError(error2) {
         if (error2 instanceof Error) {
@@ -27236,7 +27236,7 @@ var require_node = __commonJS({
 });
 
 // dist/actions/triage-agent/index.js
-var core2 = __toESM(require_core(), 1);
+var core3 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/types.js
@@ -32981,13 +32981,16 @@ help-wanted, status:triage, status:needs-info, priority:low, priority:medium,
 priority:high, priority:critical`;
 }
 
+// dist/sdk/github-app.js
+var core2 = __toESM(require_core(), 1);
+
 // dist/actions/triage-agent/index.js
 async function run() {
   try {
     const config = getConfig();
     const actor = github.context.actor;
     if (isBot(actor)) {
-      core2.info(`Skipping triage for bot actor: ${actor}`);
+      core3.info(`Skipping triage for bot actor: ${actor}`);
       return;
     }
     const circuitBreaker = createCircuitBreakerContext();
@@ -32995,16 +32998,16 @@ async function run() {
     const octokit = createOctokit(config.githubToken);
     const issue = await getIssueFromContext(octokit);
     if (!issue) {
-      core2.setFailed("No issue found in event context or input");
+      core3.setFailed("No issue found in event context or input");
       return;
     }
     if (hasStopCommand(issue.body)) {
-      core2.info("Stop command detected in issue body, skipping triage");
+      core3.info("Stop command detected in issue body, skipping triage");
       return;
     }
     const comment = getCommentFromContext();
     if (comment && hasStopCommand(comment)) {
-      core2.info("Stop command detected in comment, skipping triage");
+      core3.info("Stop command detected in comment, skipping triage");
       return;
     }
     const ref = {
@@ -33012,22 +33015,22 @@ async function run() {
       repo: github.context.repo.repo,
       issueNumber: issue.number
     };
-    core2.info("Loading repository context...");
+    core3.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, ref.owner, ref.repo);
-    core2.info("Sanitizing issue content...");
+    core3.info("Sanitizing issue content...");
     const sanitized = sanitizeIssue({
       title: issue.title,
       body: issue.body
     });
     if (sanitized.hasSuspiciousContent) {
-      core2.warning(`Suspicious content detected: ${[
+      core3.warning(`Suspicious content detected: ${[
         ...sanitized.title.detectedPatterns,
         ...sanitized.body.detectedPatterns
       ].join(", ")}`);
     }
     let potentialDuplicates = [];
     if (config.enableDuplicateDetection) {
-      core2.info("Searching for potential duplicates...");
+      core3.info("Searching for potential duplicates...");
       potentialDuplicates = await searchDuplicates(octokit, ref, issue.title, issue.body);
       potentialDuplicates = potentialDuplicates.filter((n) => n !== issue.number);
     }
@@ -33150,13 +33153,13 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
     `.trim();
     const systemPrompt = createTriageSystemPrompt().replace("{project_name}", `${repoContext.owner}/${repoContext.name}`).replace("{context}", contextSection);
     const userPrompt = buildSecurePrompt({ title: issue.title, body: issue.body }, { title: sanitized.title.sanitized, body: sanitized.body.sanitized }, instructions);
-    core2.info(`Analyzing issue with Copilot SDK (model: ${config.model})...`);
+    core3.info(`Analyzing issue with Copilot SDK (model: ${config.model})...`);
     const result = await analyzeIssue(systemPrompt, userPrompt, config.model, sanitized);
     let validated = validateTriageOutput(result);
     const isResearchReport = issue.title.toLowerCase().includes("research report") || issue.body.includes("GH-Agency Research Agent") || validated.classification === "research-report";
     if (isResearchReport && validated.isActionable && validated.alignsWithVision) {
       if (validated.recommendedAction === "human-review") {
-        core2.info("Overriding human-review to create-sub-issues for actionable research report");
+        core3.info("Overriding human-review to create-sub-issues for actionable research report");
         validated = {
           ...validated,
           classification: "research-report",
@@ -33164,26 +33167,26 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
         };
       }
     }
-    core2.setOutput("classification", validated.classification);
-    core2.setOutput("labels", JSON.stringify(validated.labels));
-    core2.setOutput("priority", validated.priority);
-    core2.setOutput("summary", validated.summary);
-    core2.setOutput("needs-human-review", validated.needsHumanReview);
-    core2.setOutput("is-actionable", validated.isActionable);
-    core2.setOutput("aligns-with-vision", validated.alignsWithVision);
-    core2.setOutput("recommended-action", validated.recommendedAction);
+    core3.setOutput("classification", validated.classification);
+    core3.setOutput("labels", JSON.stringify(validated.labels));
+    core3.setOutput("priority", validated.priority);
+    core3.setOutput("summary", validated.summary);
+    core3.setOutput("needs-human-review", validated.needsHumanReview);
+    core3.setOutput("is-actionable", validated.isActionable);
+    core3.setOutput("aligns-with-vision", validated.alignsWithVision);
+    core3.setOutput("recommended-action", validated.recommendedAction);
     if (config.dryRun) {
-      core2.info("Dry run mode - not applying changes");
-      core2.info(`Would apply labels: ${validated.labels.join(", ")}`);
-      core2.info(`Classification: ${validated.classification}`);
-      core2.info(`Priority: ${validated.priority}`);
-      core2.info(`Actionable: ${validated.isActionable} - ${validated.actionabilityReason}`);
-      core2.info(`Vision aligned: ${validated.alignsWithVision} - ${validated.visionAlignmentReason}`);
-      core2.info(`Recommended action: ${validated.recommendedAction}`);
+      core3.info("Dry run mode - not applying changes");
+      core3.info(`Would apply labels: ${validated.labels.join(", ")}`);
+      core3.info(`Classification: ${validated.classification}`);
+      core3.info(`Priority: ${validated.priority}`);
+      core3.info(`Actionable: ${validated.isActionable} - ${validated.actionabilityReason}`);
+      core3.info(`Vision aligned: ${validated.alignsWithVision} - ${validated.visionAlignmentReason}`);
+      core3.info(`Recommended action: ${validated.recommendedAction}`);
       return;
     }
     if (config.enableAutoLabel && validated.labels.length > 0) {
-      core2.info(`Applying labels: ${validated.labels.join(", ")}`);
+      core3.info(`Applying labels: ${validated.labels.join(", ")}`);
       await addLabels(octokit, ref, validated.labels);
     }
     const auditEntry = createAuditEntry("triage-agent", `${issue.title}
@@ -33196,7 +33199,7 @@ ${issue.body}`, validated.injectionFlagsDetected, [
       ...validated.labels.map((l) => `label:${l}`)
     ], DEFAULT_MODEL);
     await logAgentDecision(octokit, ref, auditEntry);
-    core2.info(`Taking action: ${validated.recommendedAction}`);
+    core3.info(`Taking action: ${validated.recommendedAction}`);
     switch (validated.recommendedAction) {
       case "assign-to-agent":
         const assignmentInstructions = `
@@ -33218,7 +33221,7 @@ This issue has been assessed as concrete and actionable. Please implement a solu
 4. Updates documentation if needed
         `.trim();
         await assignToCodingAgent(octokit, ref, assignmentInstructions);
-        core2.info(`Assigned issue #${issue.number} to Copilot coding agent`);
+        core3.info(`Assigned issue #${issue.number} to Copilot coding agent`);
         break;
       case "request-clarification":
         const clarificationQuestions = `
@@ -33234,13 +33237,13 @@ Please provide:
 This will help ensure the issue can be properly addressed.
         `.trim();
         await requestClarification(octokit, ref, clarificationQuestions);
-        core2.info(`Requested clarification on issue #${issue.number}`);
+        core3.info(`Requested clarification on issue #${issue.number}`);
         break;
       case "close-as-wontfix":
         await closeIssue(octokit, ref, `This issue has been closed as it doesn't align with the current project goals.
 
 **Reason:** ${validated.visionAlignmentReason}`, "not_planned");
-        core2.info(`Closed issue #${issue.number} as won't fix (vision misalignment)`);
+        core3.info(`Closed issue #${issue.number} as won't fix (vision misalignment)`);
         break;
       case "close-as-duplicate":
         const duplicateMsg = validated.duplicateOf ? `This issue appears to be a duplicate of #${validated.duplicateOf}.
@@ -33249,17 +33252,17 @@ Please follow the existing issue for updates.` : `This issue appears to be a dup
 
 ${validated.reasoning}`;
         await closeIssue(octokit, ref, duplicateMsg, "not_planned");
-        core2.info(`Closed issue #${issue.number} as duplicate`);
+        core3.info(`Closed issue #${issue.number} as duplicate`);
         break;
       case "create-sub-issues":
         let subIssuesToCreate = validated.subIssues;
         if (!subIssuesToCreate || subIssuesToCreate.length === 0) {
-          core2.info("No subIssues provided, making focused API call to generate them...");
+          core3.info("No subIssues provided, making focused API call to generate them...");
           subIssuesToCreate = await generateSubIssues(issue.title, issue.body, validated.summary, config.model);
         }
         if (subIssuesToCreate && subIssuesToCreate.length > 0) {
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
-          core2.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map((n) => `#${n}`).join(", ")}`);
+          core3.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map((n) => `#${n}`).join(", ")}`);
           for (let i = 0; i < createdIssues.length; i++) {
             const subIssueNumber = createdIssues[i];
             const subIssue = subIssuesToCreate[i];
@@ -33277,12 +33280,12 @@ ${subIssue.body}
 This issue was created from research report #${issue.number}. Implement according to the details above.
             `.trim();
             await assignToCodingAgent(octokit, subRef, instructions2);
-            core2.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
+            core3.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
           }
           await closeIssue(octokit, ref, `This research report has been processed and broken down into ${createdIssues.length} actionable sub-issues. Closing as completed.`, "completed");
-          core2.info(`Closed parent issue #${issue.number} after creating sub-issues`);
+          core3.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
-          core2.warning(`Unable to generate sub-issues for research report`);
+          core3.warning(`Unable to generate sub-issues for research report`);
           await createComment(octokit, ref, `## \u{1F916} AI Triage Summary
 
 **Classification:** ${validated.classification}
@@ -33324,15 +33327,15 @@ ${validated.visionAlignmentReason}
 ${validated.injectionFlagsDetected.length > 0 ? `
 \u26A0\uFE0F **Security flags detected:** ${validated.injectionFlagsDetected.join(", ")}` : ""}`;
         await createComment(octokit, ref, comment2);
-        core2.info(`Issue #${issue.number} flagged for human review`);
+        core3.info(`Issue #${issue.number} flagged for human review`);
         break;
     }
-    core2.info("Triage complete");
+    core3.info("Triage complete");
   } catch (error2) {
     if (error2 instanceof Error) {
-      core2.setFailed(error2.message);
+      core3.setFailed(error2.message);
     } else {
-      core2.setFailed("An unknown error occurred");
+      core3.setFailed("An unknown error occurred");
     }
   } finally {
     try {
@@ -33343,16 +33346,16 @@ ${validated.injectionFlagsDetected.length > 0 ? `
   }
 }
 function getConfig() {
-  const copilotToken = core2.getInput("copilot-token");
+  const copilotToken = core3.getInput("copilot-token");
   if (copilotToken) {
     process.env.COPILOT_GITHUB_TOKEN = copilotToken;
   }
   return {
-    githubToken: core2.getInput("github-token", { required: true }),
-    model: core2.getInput("model") || "claude-sonnet-4.5",
-    dryRun: core2.getBooleanInput("dry-run"),
-    enableDuplicateDetection: core2.getBooleanInput("enable-duplicate-detection"),
-    enableAutoLabel: core2.getBooleanInput("enable-auto-label")
+    githubToken: core3.getInput("github-token", { required: true }),
+    model: core3.getInput("model") || "claude-sonnet-4.5",
+    dryRun: core3.getBooleanInput("dry-run"),
+    enableDuplicateDetection: core3.getBooleanInput("enable-duplicate-detection"),
+    enableAutoLabel: core3.getBooleanInput("enable-auto-label")
   };
 }
 async function getIssueFromContext(octokit) {
@@ -33364,7 +33367,7 @@ async function getIssueFromContext(octokit) {
       body: payload.issue.body || ""
     };
   }
-  const issueNumberInput = core2.getInput("issue-number");
+  const issueNumberInput = core3.getInput("issue-number");
   if (issueNumberInput && octokit) {
     const issueNumber = parseInt(issueNumberInput, 10);
     if (!isNaN(issueNumber)) {
@@ -33380,7 +33383,7 @@ async function getIssueFromContext(octokit) {
           body: data.body || ""
         };
       } catch (error2) {
-        core2.warning(`Failed to fetch issue #${issueNumber}: ${error2 instanceof Error ? error2.message : String(error2)}`);
+        core3.warning(`Failed to fetch issue #${issueNumber}: ${error2 instanceof Error ? error2.message : String(error2)}`);
       }
     }
   }
@@ -33395,19 +33398,19 @@ function getCommentFromContext() {
 }
 async function analyzeIssue(systemPrompt, userPrompt, model, sanitized) {
   if (!hasCopilotAuth()) {
-    core2.warning("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN secret with a fine-grained PAT that has Copilot access.");
-    core2.warning("Falling back to basic analysis (no AI). See: https://docs.github.com/en/copilot");
+    core3.warning("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN secret with a fine-grained PAT that has Copilot access.");
+    core3.warning("Falling back to basic analysis (no AI). See: https://docs.github.com/en/copilot");
     return createFallbackResult(sanitized);
   }
   const response = await sendPrompt(systemPrompt, userPrompt, { model });
   if (response.finishReason === "error" || !response.content) {
-    core2.warning("Copilot SDK returned an error or empty response, falling back to basic analysis");
+    core3.warning("Copilot SDK returned an error or empty response, falling back to basic analysis");
     return createFallbackResult(sanitized);
   }
   const parsed = parseAgentResponse(response.content);
   if (!parsed) {
-    core2.warning("Failed to parse Copilot SDK response as JSON, falling back to basic analysis");
-    core2.debug(`Raw response: ${response.content}`);
+    core3.warning("Failed to parse Copilot SDK response as JSON, falling back to basic analysis");
+    core3.debug(`Raw response: ${response.content}`);
     return createFallbackResult(sanitized);
   }
   const injectionFlags = [
@@ -33424,7 +33427,7 @@ async function analyzeIssue(systemPrompt, userPrompt, model, sanitized) {
 }
 async function generateSubIssues(issueTitle, issueBody, summary, model) {
   if (!hasCopilotAuth()) {
-    core2.warning("Cannot generate sub-issues without Copilot authentication");
+    core3.warning("Cannot generate sub-issues without Copilot authentication");
     return [];
   }
   const prompt = `You are generating GitHub issues from a research report.
@@ -33464,7 +33467,7 @@ Generate issues ONLY for recommendations that are clearly actionable. Skip vague
   try {
     const response = await sendPrompt("You generate GitHub issues from research reports. Output ONLY valid JSON arrays.", prompt, { model });
     if (response.finishReason === "error" || !response.content) {
-      core2.warning("Failed to generate sub-issues: empty response");
+      core3.warning("Failed to generate sub-issues: empty response");
       return [];
     }
     const content = response.content.trim();
@@ -33472,14 +33475,14 @@ Generate issues ONLY for recommendations that are clearly actionable. Skip vague
     if (arrayMatch) {
       const parsed = JSON.parse(arrayMatch[0]);
       if (Array.isArray(parsed)) {
-        core2.info(`Generated ${parsed.length} sub-issues from research report`);
+        core3.info(`Generated ${parsed.length} sub-issues from research report`);
         return parsed;
       }
     }
-    core2.warning("Failed to parse sub-issues response as JSON array");
+    core3.warning("Failed to parse sub-issues response as JSON array");
     return [];
   } catch (error2) {
-    core2.warning(`Error generating sub-issues: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    core3.warning(`Error generating sub-issues: ${error2 instanceof Error ? error2.message : String(error2)}`);
     return [];
   }
 }

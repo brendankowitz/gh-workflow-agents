@@ -59,3 +59,11 @@ export {
   type ToolCall,
   type CompletionOptions,
 } from './copilot-client.js';
+
+// GitHub App authentication
+export {
+  hasAppAuth,
+  getAppCredentials,
+  createAppOctokit,
+  getOctokitWithAppFallback,
+} from './github-app.js';

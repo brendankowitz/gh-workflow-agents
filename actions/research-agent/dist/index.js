@@ -17587,12 +17587,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info3 = this._prepareRequest(verb, parsedUrl, headers);
+          let info4 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info3, data);
+            response = yield this.requestRaw(info4, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17602,7 +17602,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info3, data);
+                return authenticationHandler.handleAuthentication(this, info4, data);
               } else {
                 return response;
               }
@@ -17625,8 +17625,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info3 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info3, data);
+              info4 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info4, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17655,7 +17655,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info3, data) {
+      requestRaw(info4, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17667,7 +17667,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info3, data, callbackForResult);
+            this.requestRawWithCallback(info4, data, callbackForResult);
           });
         });
       }
@@ -17677,12 +17677,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info3, data, onResult) {
+      requestRawWithCallback(info4, data, onResult) {
         if (typeof data === "string") {
-          if (!info3.options.headers) {
-            info3.options.headers = {};
+          if (!info4.options.headers) {
+            info4.options.headers = {};
           }
-          info3.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info4.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17691,7 +17691,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info3.httpModule.request(info3.options, (msg) => {
+        const req = info4.httpModule.request(info4.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17703,7 +17703,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info3.options.path}`));
+          handleResult(new Error(`Request timeout: ${info4.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17739,27 +17739,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info3 = {};
-        info3.parsedUrl = requestUrl;
-        const usingSsl = info3.parsedUrl.protocol === "https:";
-        info3.httpModule = usingSsl ? https : http;
+        const info4 = {};
+        info4.parsedUrl = requestUrl;
+        const usingSsl = info4.parsedUrl.protocol === "https:";
+        info4.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info3.options = {};
-        info3.options.host = info3.parsedUrl.hostname;
-        info3.options.port = info3.parsedUrl.port ? parseInt(info3.parsedUrl.port) : defaultPort;
-        info3.options.path = (info3.parsedUrl.pathname || "") + (info3.parsedUrl.search || "");
-        info3.options.method = method;
-        info3.options.headers = this._mergeHeaders(headers);
+        info4.options = {};
+        info4.options.host = info4.parsedUrl.hostname;
+        info4.options.port = info4.parsedUrl.port ? parseInt(info4.parsedUrl.port) : defaultPort;
+        info4.options.path = (info4.parsedUrl.pathname || "") + (info4.parsedUrl.search || "");
+        info4.options.method = method;
+        info4.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info3.options.headers["user-agent"] = this.userAgent;
+          info4.options.headers["user-agent"] = this.userAgent;
         }
-        info3.options.agent = this._getAgent(info3.parsedUrl);
+        info4.options.agent = this._getAgent(info4.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info3.options);
+            handler2.prepareRequest(info4.options);
           }
         }
-        return info3;
+        return info4;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19741,18 +19741,18 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.error = error2;
-    function warning3(message, properties = {}) {
+    function warning4(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports.warning = warning3;
+    exports.warning = warning4;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.notice = notice;
-    function info3(message) {
+    function info4(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports.info = info3;
+    exports.info = info4;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -25074,8 +25074,8 @@ var require_messageReader = __commonJS({
       get onPartialMessage() {
         return this.partialMessageEmitter.event;
       }
-      firePartialMessage(info3) {
-        this.partialMessageEmitter.fire(info3);
+      firePartialMessage(info4) {
+        this.partialMessageEmitter.fire(info4);
       }
       asError(error2) {
         if (error2 instanceof Error) {
@@ -27236,7 +27236,7 @@ var require_node = __commonJS({
 });
 
 // dist/actions/research-agent/index.js
-var core2 = __toESM(require_core(), 1);
+var core3 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/types.js
@@ -30967,6 +30967,9 @@ var import_node = __toESM(require_node(), 1);
 // dist/sdk/copilot-client.js
 var core = __toESM(require_core(), 1);
 
+// dist/sdk/github-app.js
+var core2 = __toESM(require_core(), 1);
+
 // dist/actions/research-agent/index.js
 async function run() {
   try {
@@ -30976,24 +30979,24 @@ async function run() {
     const octokit = createOctokit(config.githubToken);
     const owner = github.context.repo.owner;
     const repo = github.context.repo.repo;
-    core2.info("Loading repository context...");
+    core3.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, owner, repo);
-    core2.info("Analyzing repository health...");
+    core3.info("Analyzing repository health...");
     const report = await analyzeRepository(octokit, owner, repo, config, repoContext);
-    core2.setOutput("report", JSON.stringify(report));
-    core2.setOutput("dependency-updates", report.dependencyUpdates.length);
-    core2.setOutput("technical-debt-items", report.technicalDebt.length);
-    core2.setOutput("security-advisories", report.securityAdvisories.length);
+    core3.setOutput("report", JSON.stringify(report));
+    core3.setOutput("dependency-updates", report.dependencyUpdates.length);
+    core3.setOutput("technical-debt-items", report.technicalDebt.length);
+    core3.setOutput("security-advisories", report.securityAdvisories.length);
     let issueNumber;
     if (config.outputType === "issue") {
       issueNumber = await createHealthReportIssue(octokit, owner, repo, report);
     }
     let createdIssues = [];
     if (config.createActionableIssues) {
-      core2.info("Creating actionable issues for recommendations...");
+      core3.info("Creating actionable issues for recommendations...");
       createdIssues = await createActionableIssuesFromReport(octokit, owner, repo, report, repoContext, config);
-      core2.setOutput("issues-created", createdIssues.length);
-      core2.setOutput("issue-numbers", createdIssues.join(","));
+      core3.setOutput("issues-created", createdIssues.length);
+      core3.setOutput("issue-numbers", createdIssues.join(","));
     }
     if (issueNumber) {
       const auditEntry = createAuditEntry("research-agent", JSON.stringify(config.focusAreas), [], [
@@ -31006,30 +31009,30 @@ async function run() {
       const ref = { owner, repo, issueNumber };
       await logAgentDecision(octokit, ref, auditEntry);
     }
-    core2.info(`Research complete. Created ${createdIssues.length} actionable issues.`);
+    core3.info(`Research complete. Created ${createdIssues.length} actionable issues.`);
   } catch (error2) {
     if (error2 instanceof Error) {
-      core2.setFailed(error2.message);
+      core3.setFailed(error2.message);
     } else {
-      core2.setFailed("An unknown error occurred");
+      core3.setFailed("An unknown error occurred");
     }
   }
 }
 function getConfig() {
-  const copilotToken = core2.getInput("copilot-token");
+  const copilotToken = core3.getInput("copilot-token");
   if (copilotToken) {
     process.env.COPILOT_GITHUB_TOKEN = copilotToken;
   }
-  const focusAreasInput = core2.getInput("focus-areas");
+  const focusAreasInput = core3.getInput("focus-areas");
   const focusAreas = focusAreasInput ? focusAreasInput.split(",").map((s) => s.trim()) : ["dependencies", "security", "technical-debt", "industry-research"];
-  const minPriority = core2.getInput("min-priority-for-issue") || "high";
+  const minPriority = core3.getInput("min-priority-for-issue") || "high";
   const validPriorities = ["low", "medium", "high", "critical"];
   return {
-    githubToken: core2.getInput("github-token", { required: true }),
-    model: core2.getInput("model") || "claude-sonnet-4.5",
-    outputType: core2.getInput("output-type") || "issue",
+    githubToken: core3.getInput("github-token", { required: true }),
+    model: core3.getInput("model") || "claude-sonnet-4.5",
+    outputType: core3.getInput("output-type") || "issue",
     focusAreas,
-    createActionableIssues: core2.getInput("create-actionable-issues") === "true",
+    createActionableIssues: core3.getInput("create-actionable-issues") === "true",
     minPriorityForIssue: validPriorities.includes(minPriority) ? minPriority : "high"
   };
 }
@@ -31044,10 +31047,10 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
     recommendations: []
   };
   if (config.focusAreas.includes("dependencies")) {
-    core2.info("Checking dependencies...");
+    core3.info("Checking dependencies...");
   }
   if (config.focusAreas.includes("security")) {
-    core2.info("Checking security advisories...");
+    core3.info("Checking security advisories...");
     try {
       const advisories = await octokit.rest.dependabot.listAlertsForRepo({
         owner,
@@ -31066,11 +31069,11 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
         });
       }
     } catch {
-      core2.info("Could not fetch Dependabot alerts (may require additional permissions)");
+      core3.info("Could not fetch Dependabot alerts (may require additional permissions)");
     }
   }
   if (config.focusAreas.includes("industry-research")) {
-    core2.info("Analyzing industry trends and similar projects...");
+    core3.info("Analyzing industry trends and similar projects...");
     const { featureSuggestions, industryInsights } = await analyzeIndustryTrends(octokit, owner, repo, repoContext, config);
     report.featureSuggestions = featureSuggestions;
     report.industryInsights = industryInsights;
@@ -31098,7 +31101,7 @@ async function analyzeIndustryTrends(octokit, owner, repo, repoContext, config) 
   const repoTopics = await getRepositoryTopics(octokit, owner, repo);
   const repoDescription = await getRepositoryDescription(octokit, owner, repo);
   if (repoTopics.length > 0) {
-    core2.info(`Searching for similar projects with topics: ${repoTopics.join(", ")}`);
+    core3.info(`Searching for similar projects with topics: ${repoTopics.join(", ")}`);
     const similarRepos = await searchSimilarRepositories(octokit, repoTopics, `${owner}/${repo}`);
     for (const similarRepo of similarRepos.slice(0, 5)) {
       const features = await analyzeRepositoryFeatures(octokit, similarRepo);
@@ -31165,7 +31168,7 @@ async function searchSimilarRepositories(octokit, topics, excludeRepo) {
       }
     }
   } catch {
-    core2.info("Could not search for similar repositories");
+    core3.info("Could not search for similar repositories");
   }
   return results;
 }
@@ -31280,7 +31283,7 @@ function consolidateFeatureSuggestions(suggestions) {
   return Array.from(consolidated.values()).slice(0, 10);
 }
 function generateIndustryInsights(topics, _description, _repoContext, _model) {
-  core2.info("Generating industry insights based on repository topics...");
+  core3.info("Generating industry insights based on repository topics...");
   return generateFallbackInsights(topics);
 }
 function generateFallbackInsights(topics) {
@@ -31348,7 +31351,7 @@ async function createHealthReportIssue(octokit, owner, repo, report) {
       issue_number: issueNumber,
       body
     });
-    core2.info(`Updated existing research issue #${issueNumber}`);
+    core3.info(`Updated existing research issue #${issueNumber}`);
     return issueNumber;
   } else {
     const newIssue = await octokit.rest.issues.create({
@@ -31358,7 +31361,7 @@ async function createHealthReportIssue(octokit, owner, repo, report) {
       body,
       labels: ["research-report"]
     });
-    core2.info(`Created research issue #${newIssue.data.number}`);
+    core3.info(`Created research issue #${newIssue.data.number}`);
     return newIssue.data.number;
   }
 }
@@ -31459,24 +31462,24 @@ async function createActionableIssuesFromReport(octokit, owner, repo, report, re
     const recPriorityIndex = priorityOrder.indexOf(rec.priority);
     return recPriorityIndex >= minPriorityIndex;
   });
-  core2.info(`Found ${filteredRecs.length} recommendations meeting priority threshold (${config.minPriorityForIssue}+)`);
+  core3.info(`Found ${filteredRecs.length} recommendations meeting priority threshold (${config.minPriorityForIssue}+)`);
   const existingIssues = await getExistingIssues(octokit, owner, repo);
   for (const rec of filteredRecs) {
     if (!rec.alignsWithVision) {
-      core2.info(`Skipping "${rec.title}" - does not align with project vision`);
+      core3.info(`Skipping "${rec.title}" - does not align with project vision`);
       continue;
     }
     const isDuplicate = checkForDuplicateIssue(rec, existingIssues);
     if (isDuplicate) {
-      core2.info(`Skipping "${rec.title}" - similar issue already exists`);
+      core3.info(`Skipping "${rec.title}" - similar issue already exists`);
       continue;
     }
     try {
       const issueNumber = await createActionableIssue(octokit, owner, repo, rec);
       createdIssues.push(issueNumber);
-      core2.info(`Created issue #${issueNumber}: ${rec.title}`);
+      core3.info(`Created issue #${issueNumber}: ${rec.title}`);
     } catch (error2) {
-      core2.warning(`Failed to create issue "${rec.title}": ${error2 instanceof Error ? error2.message : String(error2)}`);
+      core3.warning(`Failed to create issue "${rec.title}": ${error2 instanceof Error ? error2.message : String(error2)}`);
     }
   }
   return createdIssues;
@@ -31616,7 +31619,7 @@ async function getExistingIssues(octokit, owner, repo) {
       body: issue.body ?? null
     }));
   } catch {
-    core2.warning("Could not fetch existing issues for duplicate detection");
+    core3.warning("Could not fetch existing issues for duplicate detection");
     return [];
   }
 }
@@ -31658,7 +31661,7 @@ async function ensureLabelsExist(octokit, owner, repo, labels) {
         await octokit.rest.issues.createLabel({ owner, repo, name: label, color });
         validLabels.push(label);
       } catch {
-        core2.warning(`Could not create label: ${label}`);
+        core3.warning(`Could not create label: ${label}`);
       }
     }
   }
