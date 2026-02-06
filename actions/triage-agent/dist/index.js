@@ -32996,6 +32996,10 @@ async function run() {
     const circuitBreaker = createCircuitBreakerContext();
     checkCircuitBreaker(circuitBreaker);
     const octokit = createOctokit(config.githubToken);
+    if (github.context.payload.issue?.pull_request) {
+      core3.info("Skipping triage: this is a pull request comment, not an issue");
+      return;
+    }
     const issue = await getIssueFromContext(octokit);
     if (!issue) {
       core3.setFailed("No issue found in event context or input");

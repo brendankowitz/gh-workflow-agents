@@ -72,6 +72,12 @@ export async function run(): Promise<void> {
     // Create Octokit instance first (needed for workflow_dispatch to fetch issue)
     const octokit = createOctokit(config.githubToken);
 
+    // Skip if this is a PR comment (issue_comment fires for PRs too)
+    if (github.context.payload.issue?.pull_request) {
+      core.info('Skipping triage: this is a pull request comment, not an issue');
+      return;
+    }
+
     // Get issue data from event or input
     const issue = await getIssueFromContext(octokit);
     if (!issue) {
