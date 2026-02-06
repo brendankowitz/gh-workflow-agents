@@ -17,6 +17,8 @@ export {
   addLabels,
   removeLabels,
   createComment,
+  addReaction,
+  removeReaction,
   createPullRequestReview,
   dispatchRepositoryEvent,
   getIssue,

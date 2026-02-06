@@ -40,6 +40,8 @@ import {
   getOctokitWithAppFallback,
   mergePullRequest,
   closeLinkedIssue,
+  addReaction,
+  removeReaction,
   type PullRequestRef,
 } from '../../sdk/index.js';
 
@@ -58,6 +60,12 @@ interface ReviewConfig {
  * Main entry point for the review agent
  */
 export async function run(): Promise<void> {
+  let eyesReactionId: number | null = null;
+  let eyesOwner = '';
+  let eyesRepo = '';
+  let eyesPrNumber = 0;
+  let eyesOctokit: ReturnType<typeof createOctokit> | null = null;
+
   // Handle uncaught errors from Copilot SDK stream issues
   // The SDK can throw async errors even after we've stopped it
   process.on('uncaughtException', (error) => {
@@ -116,6 +124,13 @@ export async function run(): Promise<void> {
       repo: github.context.repo.repo,
       pullNumber: pr.number,
     };
+
+    // Add eyes reaction to show the agent is working
+    eyesOctokit = octokit;
+    eyesOwner = ref.owner;
+    eyesRepo = ref.repo;
+    eyesPrNumber = ref.pullNumber;
+    eyesReactionId = await addReaction(octokit, ref.owner, ref.repo, ref.pullNumber, 'eyes');
 
     // Check if this is a Dependabot PR
     const isDependabot = await isDependabotPR(octokit, ref);
@@ -239,10 +254,20 @@ export async function run(): Promise<void> {
         // Auto-merge logic still applies if enabled
         if (config.autoMerge) {
           try {
-            const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some(
+            let hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some(
               (l: any) => l.name === 'agent-coded'
             ) || false;
-            
+
+            // Fallback: fetch labels via API (needed for workflow_dispatch)
+            if (!hasAgentCodedLabel) {
+              try {
+                const { data: prData } = await octokit.rest.pulls.get({
+                  owner: ref.owner, repo: ref.repo, pull_number: ref.pullNumber,
+                });
+                hasAgentCodedLabel = prData.labels.some((l: any) => l.name === 'agent-coded');
+              } catch { /* ignore */ }
+            }
+
             if (hasAgentCodedLabel) {
               core.info('PR has agent-coded label and was auto-approved - attempting auto-merge');
               const mergeResult = await mergePullRequest(octokit, ref);
@@ -280,9 +305,19 @@ export async function run(): Promise<void> {
     if (event === 'APPROVE' && config.autoMerge) {
       try {
         // Check if PR has the 'agent-coded' label
-        const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some(
+        let hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some(
           (l: any) => l.name === 'agent-coded'
         ) || false;
+
+        // Fallback: fetch labels via API (needed for workflow_dispatch)
+        if (!hasAgentCodedLabel) {
+          try {
+            const { data: prData } = await octokit.rest.pulls.get({
+              owner: ref.owner, repo: ref.repo, pull_number: ref.pullNumber,
+            });
+            hasAgentCodedLabel = prData.labels.some((l: any) => l.name === 'agent-coded');
+          } catch { /* ignore */ }
+        }
 
         if (hasAgentCodedLabel) {
           core.info('PR has agent-coded label and was approved - attempting auto-merge');
@@ -368,6 +403,10 @@ export async function run(): Promise<void> {
       core.setFailed('An unknown error occurred');
     }
   } finally {
+    // Remove eyes reaction now that processing is done
+    if (eyesReactionId && eyesOctokit) {
+      await removeReaction(eyesOctokit, eyesOwner, eyesRepo, eyesPrNumber, eyesReactionId);
+    }
     // Clean up Copilot SDK client to prevent hanging
     try {
       await stopCopilotClient();

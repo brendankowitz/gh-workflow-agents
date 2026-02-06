@@ -38,6 +38,8 @@ import {
   createSubIssues,
   stopCopilotClient,
   hasCopilotAuth,
+  addReaction,
+  removeReaction,
   type IssueRef,
 } from '../../sdk/index.js';
 
@@ -54,6 +56,9 @@ interface TriageConfig {
  * Main entry point for the triage agent
  */
 export async function run(): Promise<void> {
+  let eyesReactionId: number | null = null;
+  let eyesRef: IssueRef | null = null;
+  let eyesOctokit: ReturnType<typeof createOctokit> | null = null;
   try {
     // Get configuration
     const config = getConfig();
@@ -102,6 +107,11 @@ export async function run(): Promise<void> {
       repo: github.context.repo.repo,
       issueNumber: issue.number,
     };
+
+    // Add eyes reaction to show the agent is working
+    eyesOctokit = octokit;
+    eyesRef = ref;
+    eyesReactionId = await addReaction(octokit, ref.owner, ref.repo, ref.issueNumber, 'eyes');
 
     // Load repository context
     core.info('Loading repository context...');
@@ -504,6 +514,10 @@ ${validated.injectionFlagsDetected.length > 0 ? `\n⚠️ *Note: Some content in
       core.setFailed('An unknown error occurred');
     }
   } finally {
+    // Remove eyes reaction now that processing is done
+    if (eyesReactionId && eyesOctokit && eyesRef) {
+      await removeReaction(eyesOctokit, eyesRef.owner, eyesRef.repo, eyesRef.issueNumber, eyesReactionId);
+    }
     // Clean up Copilot SDK client to prevent hanging
     try {
       await stopCopilotClient();

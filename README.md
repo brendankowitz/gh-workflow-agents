@@ -107,6 +107,15 @@
 
 ## 🚀 Quick Start
 
+### 0. Repository Settings
+
+Enable these settings on your GitHub repository before installing the agent workflows:
+
+| Setting | Path | Why |
+|---------|------|-----|
+| **Allow auto-merge** | Settings → General → Pull Requests | Lets the review agent merge approved PRs automatically |
+| **Automatically delete head branches** | Settings → General → Pull Requests | Cleans up agent branches after merge |
+
 ### 1. Install the Triage Agent
 
 Create `.github/workflows/ai-triage.yml`:

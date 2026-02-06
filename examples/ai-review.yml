@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-      contents: read
+      contents: write
 
     # Skip bot PRs to prevent loops (except Copilot - we want to review those!)
     # Always run for workflow_dispatch (manual trigger)
@@ -68,3 +68,4 @@ jobs:
           model: claude-sonnet-4.5
           auto-approve-dependabot: 'true'
           security-focus: 'true'
+          auto-merge: 'true'

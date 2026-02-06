@@ -113,6 +113,65 @@ export async function createComment(
 }
 
 /**
+ * Adds a reaction to an issue or PR (best-effort, never throws)
+ *
+ * @param octokit - Authenticated Octokit
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param issueNumber - Issue or PR number
+ * @param content - Reaction type
+ * @returns Reaction ID if successful, null otherwise
+ */
+export async function addReaction(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  content: '+1' | '-1' | 'laugh' | 'confused' | 'heart' | 'hooray' | 'rocket' | 'eyes'
+): Promise<number | null> {
+  try {
+    const response = await octokit.rest.reactions.createForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      content,
+    });
+    return response.data.id;
+  } catch {
+    // Best-effort — never fail the agent over a reaction
+    return null;
+  }
+}
+
+/**
+ * Removes a reaction from an issue or PR (best-effort, never throws)
+ *
+ * @param octokit - Authenticated Octokit
+ * @param owner - Repository owner
+ * @param repo - Repository name
+ * @param issueNumber - Issue or PR number
+ * @param reactionId - Reaction ID to remove
+ */
+export async function removeReaction(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  reactionId: number
+): Promise<void> {
+  try {
+    await octokit.rest.reactions.deleteForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      reaction_id: reactionId,
+    });
+  } catch {
+    // Best-effort — never fail the agent over a reaction
+  }
+}
+
+/**
  * Posts an agent audit log as a collapsed comment
  *
  * @param octokit - Authenticated Octokit
