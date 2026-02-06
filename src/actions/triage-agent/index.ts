@@ -25,7 +25,7 @@ import {
   formatContextForPrompt,
   addLabels,
   createComment,
-  logAgentDecision,
+  formatAuditLog,
   searchDuplicates,
   createAuditEntry,
   createTriageSystemPrompt,
@@ -335,7 +335,7 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
       await addLabels(octokit, ref, validated.labels as AllowedLabel[]);
     }
 
-    // Log agent decision
+    // Build audit log footer to append to triage comments
     const auditEntry = createAuditEntry(
       'triage-agent',
       `${issue.title}\n${issue.body}`,
@@ -350,7 +350,7 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
       ],
       DEFAULT_MODEL
     );
-    await logAgentDecision(octokit, ref, auditEntry);
+    const auditFooter = formatAuditLog(auditEntry);
 
     // Take action based on recommendation
     core.info(`Taking action: ${validated.recommendedAction}`);
@@ -377,7 +377,7 @@ This issue has been assessed as concrete and actionable. Please implement a solu
 4. Updates documentation if needed
         `.trim();
 
-        await assignToCodingAgent(octokit, ref, assignmentInstructions);
+        await assignToCodingAgent(octokit, ref, assignmentInstructions + auditFooter);
         core.info(`Assigned issue #${issue.number} to Copilot coding agent`);
         break;
 
@@ -396,7 +396,7 @@ Could you help clarify:
 Once I have a clearer picture, I can get this moving forward.
         `.trim();
 
-        await requestClarification(octokit, ref, clarificationQuestions);
+        await requestClarification(octokit, ref, clarificationQuestions + auditFooter);
         core.info(`Requested clarification on issue #${issue.number}`);
         break;
 
@@ -405,7 +405,7 @@ Once I have a clearer picture, I can get this moving forward.
         await closeIssue(
           octokit,
           ref,
-          `Thanks for the suggestion! After reviewing this against the project's current direction, I don't think this is something we'll be pursuing right now.\n\n${validated.visionAlignmentReason}\n\nFeel free to open a new issue if you think there's a different angle worth exploring.`,
+          `Thanks for the suggestion! After reviewing this against the project's current direction, I don't think this is something we'll be pursuing right now.\n\n${validated.visionAlignmentReason}\n\nFeel free to open a new issue if you think there's a different angle worth exploring.` + auditFooter,
           'not_planned'
         );
         core.info(`Closed issue #${issue.number} as won't fix (vision misalignment)`);
@@ -417,7 +417,7 @@ Once I have a clearer picture, I can get this moving forward.
           ? `Thanks for raising this! It looks like this is already being tracked in #${validated.duplicateOf}, so I'm going to close this one to keep the discussion in one place. Feel free to add any additional thoughts over there!`
           : `Thanks for this! After looking around, I found this is already being discussed elsewhere.\n\n${validated.reasoning}\n\nClosing this to consolidate the conversation.`;
 
-        await closeIssue(octokit, ref, duplicateMsg, 'not_planned');
+        await closeIssue(octokit, ref, duplicateMsg + auditFooter, 'not_planned');
         core.info(`Closed issue #${issue.number} as duplicate`);
         break;
 
@@ -462,7 +462,7 @@ This issue was created from research report #${issue.number}. Implement accordin
           await closeIssue(
             octokit,
             ref,
-            `Great research! I've broken this down into ${createdIssues.length} focused issues (${createdIssues.map(n => `#${n}`).join(', ')}) and assigned them for implementation. Closing this one since all the actionable items are now being tracked separately.`,
+            `Great research! I've broken this down into ${createdIssues.length} focused issues (${createdIssues.map(n => `#${n}`).join(', ')}) and assigned them for implementation. Closing this one since all the actionable items are now being tracked separately.` + auditFooter,
             'completed'
           );
           core.info(`Closed parent issue #${issue.number} after creating sub-issues`);
@@ -474,7 +474,7 @@ ${validated.summary}
 
 ${validated.reasoning}
 
-I tried to break this down into separate issues for each recommendation, but ran into some trouble doing that automatically. Could a maintainer take a look and create focused issues for each actionable item? That'll help us track and implement them properly.`);
+I tried to break this down into separate issues for each recommendation, but ran into some trouble doing that automatically. Could a maintainer take a look and create focused issues for each actionable item? That'll help us track and implement them properly.` + auditFooter);
         }
         break;
 
@@ -501,7 +501,7 @@ ${validated.visionAlignmentReason}
 I've flagged this as **${validated.classification}** with **${validated.priority}** priority. A maintainer will review this soon to decide on next steps.
 ${validated.injectionFlagsDetected.length > 0 ? `\n⚠️ *Note: Some content in this issue was flagged for review: ${validated.injectionFlagsDetected.join(', ')}*` : ''}`;
 
-        await createComment(octokit, ref, comment);
+        await createComment(octokit, ref, comment + auditFooter);
         core.info(`Issue #${issue.number} flagged for human review`);
         break;
     }
