@@ -80,14 +80,17 @@ export async function run(): Promise<void> {
   try {
     const config = getConfig();
 
-    // Check for bot actors (but allow Copilot PRs - we want to review those!)
+    // Check for bot actors (but allow Copilot PRs and workflow_dispatch)
     const actor = github.context.actor;
+    const eventName = github.context.eventName;
     const isCopilotActor = actor.toLowerCase() === 'copilot-swe-agent';
-    if (isBot(actor) && !isCopilotActor) {
+    if (isBot(actor) && !isCopilotActor && eventName !== 'workflow_dispatch') {
       core.info(`Skipping review for bot actor: ${actor}`);
       return;
     }
-    if (isCopilotActor) {
+    if (eventName === 'workflow_dispatch') {
+      core.info(`Review triggered via workflow_dispatch (actor: ${actor})`);
+    } else if (isCopilotActor) {
       core.info(`Reviewing Copilot-generated PR from: ${actor}`);
     }
 
