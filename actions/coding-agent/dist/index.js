@@ -33868,6 +33868,8 @@ async function commitAndPushWithGit(changes, task, config) {
       core3.info(`  git: ${cmd}`);
       return execSync(cmd, { cwd: workspace, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
     };
+    gitExec('git config user.email "github-actions[bot]@users.noreply.github.com"');
+    gitExec('git config user.name "github-actions[bot]"');
     try {
       gitExec(`git checkout ${branchName}`);
     } catch {

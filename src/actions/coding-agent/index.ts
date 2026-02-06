@@ -1916,6 +1916,10 @@ async function commitAndPushWithGit(
       return execSync(cmd, { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     };
 
+    // Configure git identity for the commit
+    gitExec('git config user.email "github-actions[bot]@users.noreply.github.com"');
+    gitExec('git config user.name "github-actions[bot]"');
+
     // Create or checkout branch
     try {
       gitExec(`git checkout ${branchName}`);
