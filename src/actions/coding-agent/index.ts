@@ -8,6 +8,9 @@
 
 import * as core from '@actions/core';
 import * as github from '@actions/github';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
 import {
   sanitizeInput,
   checkCircuitBreaker,
@@ -1859,12 +1862,25 @@ async function commitAndPush(
     return await commitAndPushWithToken(primaryToken, changes, task, config);
   } catch (error: any) {
     const msg = error?.message || String(error);
-    if (fallbackToken && msg.includes('Resource not accessible')) {
+    if (msg.includes('Resource not accessible')) {
       core.warning(`Primary token (GITHUB_TOKEN) failed: ${msg}`);
-      core.info('Retrying with copilot token (PAT)...');
-      return await commitAndPushWithToken(fallbackToken, changes, task, config);
+
+      // Try copilotToken via API
+      if (fallbackToken) {
+        try {
+          core.info('Retrying with copilot token (PAT) via API...');
+          return await commitAndPushWithToken(fallbackToken, changes, task, config);
+        } catch (fallbackError: any) {
+          const fallbackMsg = fallbackError?.message || String(fallbackError);
+          core.warning(`Copilot token also failed: ${fallbackMsg}`);
+        }
+      }
+
+      // Last resort: use git CLI (inherits checkout token)
+      core.info('Both API tokens failed — falling back to git CLI...');
+      return await commitAndPushWithGit(changes, task, config);
     }
-    // No fallback available — return failed result
+    // Non-auth error — return failed result
     core.error(`Failed to commit and push changes: ${msg}`);
     const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
     const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
@@ -1873,6 +1889,81 @@ async function commitAndPush(
       commitSha: '',
       pushedSuccessfully: false,
     };
+  }
+}
+
+/**
+ * Last-resort fallback: commit and push using git CLI.
+ * Uses the token configured by actions/checkout (COPILOT_GITHUB_TOKEN).
+ */
+async function commitAndPushWithGit(
+  changes: CodeChanges,
+  task: CodingTask,
+  config: CodingConfig
+): Promise<CommitResult> {
+  const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
+  const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
+  const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+
+  try {
+    if (config.dryRun) {
+      core.info('[DRY RUN] Would commit and push via git CLI');
+      return { branchName, commitSha: 'dry-run-sha', pushedSuccessfully: true };
+    }
+
+    const gitExec = (cmd: string) => {
+      core.info(`  git: ${cmd}`);
+      return execSync(cmd, { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    };
+
+    // Create or checkout branch
+    try {
+      gitExec(`git checkout ${branchName}`);
+    } catch {
+      gitExec(`git checkout -b ${branchName}`);
+    }
+
+    // Write files to disk
+    for (const file of changes.files) {
+      const fullPath = path.join(workspace, file.path);
+      if (file.operation === 'delete') {
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          core.info(`  Deleted: ${file.path}`);
+        }
+      } else {
+        // Create directory if needed
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(fullPath, file.content || '', 'utf-8');
+        core.info(`  Wrote: ${file.path}`);
+      }
+    }
+
+    // Stage, commit, push
+    gitExec('git add -A');
+
+    const commitMsg = `${changes.summary || `Agent changes for #${issueOrPrNumber}`}`;
+    // Use env var for commit message to avoid shell escaping issues
+    execSync('git commit -m "$MSG"', {
+      cwd: workspace,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, MSG: commitMsg },
+    });
+
+    gitExec(`git push origin ${branchName} --force-with-lease`);
+
+    // Get the commit SHA
+    const commitSha = gitExec('git rev-parse HEAD');
+    core.info(`Git CLI commit successful: ${commitSha}`);
+
+    return { branchName, commitSha, pushedSuccessfully: true };
+  } catch (error) {
+    core.error(`Git CLI fallback failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { branchName, commitSha: '', pushedSuccessfully: false };
   }
 }
 
