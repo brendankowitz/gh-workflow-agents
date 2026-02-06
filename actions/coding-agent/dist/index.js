@@ -31124,6 +31124,30 @@ async function createComment(octokit, ref, body) {
   });
   return response.data.id;
 }
+async function addReaction(octokit, owner, repo, issueNumber, content) {
+  try {
+    const response = await octokit.rest.reactions.createForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      content
+    });
+    return response.data.id;
+  } catch {
+    return null;
+  }
+}
+async function removeReaction(octokit, owner, repo, issueNumber, reactionId) {
+  try {
+    await octokit.rest.reactions.deleteForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      reaction_id: reactionId
+    });
+  } catch {
+  }
+}
 
 // node_modules/@github/copilot-sdk/dist/client.js
 var import_node = __toESM(require_node(), 1);
@@ -32660,6 +32684,11 @@ function validateBranchName(branch) {
 }
 async function run() {
   let failed = false;
+  let eyesReactionId = null;
+  let eyesOwner = "";
+  let eyesRepo = "";
+  let eyesIssueNumber = 0;
+  let eyesOctokit = null;
   process.on("uncaughtException", (error3) => {
     if (error3.message?.includes("stream") || error3.message?.includes("ERR_STREAM_DESTROYED")) {
       core3.warning(`Suppressed async SDK error: ${error3.message}`);
@@ -32681,8 +32710,14 @@ async function run() {
     }
     const isAgentCommand = eventName === "issue_comment" && hasAgentCommand(github.context.payload.comment?.body || "");
     if (eventName === "issue_comment" && !isAgentCommand) {
-      core3.info("Comment does not contain /agent command, skipping");
-      return;
+      const isPR = !!github.context.payload.issue?.pull_request;
+      const hasAgentLabel = github.context.payload.issue?.labels?.some((l) => l.name === "agent-coded");
+      if (isPR && hasAgentLabel && !isBot(github.context.actor)) {
+        core3.info("Human comment on agent-coded PR - treating as feedback");
+      } else {
+        core3.info("Comment does not contain /agent command, skipping");
+        return;
+      }
     }
     const circuitBreaker = createCircuitBreakerContext();
     checkCircuitBreaker(circuitBreaker);
@@ -32691,6 +32726,14 @@ async function run() {
     if (!task) {
       core3.setFailed("Unable to determine coding task from context");
       return;
+    }
+    const targetNumber = task.issueNumber || task.prNumber;
+    if (targetNumber) {
+      eyesOctokit = octokit;
+      eyesOwner = github.context.repo.owner;
+      eyesRepo = github.context.repo.repo;
+      eyesIssueNumber = targetNumber;
+      eyesReactionId = await addReaction(octokit, eyesOwner, eyesRepo, eyesIssueNumber, "eyes");
     }
     if (hasStopCommand(task.content)) {
       core3.info("Stop command detected, skipping coding");
@@ -32797,6 +32840,9 @@ Please review: ${prResult.prUrl}`)
       core3.setFailed("An unknown error occurred");
     }
   } finally {
+    if (eyesReactionId && eyesOctokit) {
+      await removeReaction(eyesOctokit, eyesOwner, eyesRepo, eyesIssueNumber, eyesReactionId);
+    }
     try {
       await stopCopilotClient();
     } catch {
@@ -32833,7 +32879,7 @@ async function getTaskFromContext(octokit) {
   const payload = github.context.payload;
   const eventName = github.context.eventName;
   const issueNumberInput = core3.getInput("issue-number");
-  if (issueNumberInput) {
+  if (issueNumberInput && eventName === "workflow_dispatch") {
     const issueNumber = parseInt(issueNumberInput, 10);
     if (!isNaN(issueNumber)) {
       try {
@@ -32855,7 +32901,7 @@ ${issue.body || ""}`
     }
   }
   const prNumberInput = core3.getInput("pr-number");
-  if (prNumberInput) {
+  if (prNumberInput && eventName === "workflow_dispatch") {
     const prNumber = parseInt(prNumberInput, 10);
     if (!isNaN(prNumber)) {
       try {
@@ -33025,6 +33071,60 @@ ${payload.issue.body || ""}` + (agentCmd.instructions ? `
 ${agentCmd.instructions}` : ""), "issue-content").sanitized,
           agentCommand: agentCmd.command
         };
+      }
+    }
+  }
+  if (eventName === "issue_comment" && payload.comment && payload.issue?.pull_request) {
+    const hasAgentLabel = payload.issue.labels?.some((l) => l.name === "agent-coded");
+    if (hasAgentLabel && !isBot(github.context.actor)) {
+      const prNumber = payload.issue.number;
+      core3.info(`Human comment on agent-coded PR #${prNumber} - treating as feedback`);
+      try {
+        const { data: pr } = await octokit.rest.pulls.get({
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          pull_number: prNumber
+        });
+        const { data: reviews } = await octokit.rest.pulls.listReviews({
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          pull_number: prNumber
+        });
+        const latestReview = reviews.reverse().find((r) => r.state === "CHANGES_REQUESTED");
+        let reviewComments = [];
+        if (latestReview) {
+          try {
+            const { data: comments } = await octokit.rest.pulls.listReviewComments({
+              owner: github.context.repo.owner,
+              repo: github.context.repo.repo,
+              pull_number: prNumber
+            });
+            reviewComments = comments.filter((c) => c.pull_request_review_id === latestReview.id).map((c) => `**${c.path}:${c.line}** - ${c.body}`).filter((c) => c.trim().length > 0);
+          } catch (error3) {
+            core3.warning(`Failed to fetch review comments: ${error3 instanceof Error ? error3.message : String(error3)}`);
+          }
+        }
+        let fullFeedback = `### Human Instruction
+
+${payload.comment.body}`;
+        if (latestReview?.body) {
+          fullFeedback += "\n\n### Review Feedback\n\n" + latestReview.body;
+        }
+        if (reviewComments.length > 0) {
+          fullFeedback += "\n\n### Inline Review Comments\n\n" + reviewComments.join("\n\n");
+        }
+        const branchValidation = validateBranchName(pr.head.ref);
+        return {
+          type: "pr-feedback",
+          prNumber: pr.number,
+          content: sanitizeInput(`${pr.title}
+
+${pr.body || ""}`, "pr-content").sanitized,
+          reviewFeedback: sanitizeInput(fullFeedback, "review-feedback").sanitized,
+          existingBranch: branchValidation.sanitized
+        };
+      } catch (error3) {
+        core3.warning(`Failed to fetch PR #${prNumber}: ${error3 instanceof Error ? error3.message : String(error3)}`);
       }
     }
   }
@@ -33921,17 +34021,61 @@ async function managePR(commitResult, task, changes, octokit, config) {
     const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
     const baseBranch = repoData.default_branch;
     core3.info("Checking for existing PR...");
-    const { data: existingPRs } = await octokit.rest.pulls.list({
-      owner,
-      repo,
-      head: `${owner}:${commitResult.branchName}`,
-      state: "open"
-    });
-    if (existingPRs.length > 0) {
-      const existingPR = existingPRs[0];
-      if (!existingPR) {
-        throw new Error("Unexpected: existingPRs[0] is undefined");
+    let existingPR;
+    if (task.type === "pr-feedback" && task.prNumber) {
+      try {
+        const { data: pr } = await octokit.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: task.prNumber
+        });
+        if (pr.state === "open") {
+          existingPR = { number: pr.number, html_url: pr.html_url };
+          core3.info(`Found existing PR #${pr.number} by PR number`);
+        }
+      } catch {
+        core3.info(`PR #${task.prNumber} not found or not open, falling back to branch search`);
       }
+    }
+    if (!existingPR) {
+      const { data: existingPRs } = await octokit.rest.pulls.list({
+        owner,
+        repo,
+        head: `${owner}:${commitResult.branchName}`,
+        state: "open"
+      });
+      if (existingPRs.length > 0 && existingPRs[0]) {
+        existingPR = { number: existingPRs[0].number, html_url: existingPRs[0].html_url };
+        core3.info(`Found existing PR #${existingPRs[0].number} by branch name`);
+      }
+    }
+    if (!existingPR) {
+      const { data: closedPRs } = await octokit.rest.pulls.list({
+        owner,
+        repo,
+        head: `${owner}:${commitResult.branchName}`,
+        state: "closed",
+        sort: "updated",
+        direction: "desc"
+      });
+      const reopenable = closedPRs.find((pr) => !pr.merged_at);
+      if (reopenable) {
+        core3.info(`Found closed (not merged) PR #${reopenable.number}, reopening...`);
+        try {
+          const { data: reopened } = await octokit.rest.pulls.update({
+            owner,
+            repo,
+            pull_number: reopenable.number,
+            state: "open"
+          });
+          existingPR = { number: reopened.number, html_url: reopened.html_url };
+          core3.info(`Reopened PR #${reopened.number}`);
+        } catch (reopenErr) {
+          core3.warning(`Failed to reopen PR #${reopenable.number}: ${reopenErr instanceof Error ? reopenErr.message : String(reopenErr)}`);
+        }
+      }
+    }
+    if (existingPR) {
       core3.info(`Found existing PR #${existingPR.number}`);
       const { data: comments } = await octokit.rest.issues.listComments({
         owner,

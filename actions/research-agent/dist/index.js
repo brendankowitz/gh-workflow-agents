@@ -30942,12 +30942,16 @@ async function createComment(octokit, ref, body) {
   });
   return response.data.id;
 }
-async function logAgentDecision(octokit, ref, auditEntry) {
-  const comment = `<details><summary>\u2728 Agent Decision Log</summary>
+function formatAuditLog(auditEntry) {
+  return `
+
+<details><summary>\u{1F916} Agent Decision Log</summary>
 
 \`\`\`json
 ` + JSON.stringify(auditEntry, null, 2) + "\n```\n</details>";
-  await createComment(octokit, ref, comment);
+}
+async function logAgentDecision(octokit, ref, auditEntry) {
+  await createComment(octokit, ref, formatAuditLog(auditEntry));
 }
 function createAuditEntry(agent, rawInput, injectionFlags, actions, model) {
   const inputHash = createHash2("sha256").update(rawInput).digest("hex").substring(0, 12);

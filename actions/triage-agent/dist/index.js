@@ -31248,12 +31248,37 @@ async function createComment(octokit, ref, body) {
   });
   return response.data.id;
 }
-async function logAgentDecision(octokit, ref, auditEntry) {
-  const comment = `<details><summary>\u2728 Agent Decision Log</summary>
+async function addReaction(octokit, owner, repo, issueNumber, content) {
+  try {
+    const response = await octokit.rest.reactions.createForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      content
+    });
+    return response.data.id;
+  } catch {
+    return null;
+  }
+}
+async function removeReaction(octokit, owner, repo, issueNumber, reactionId) {
+  try {
+    await octokit.rest.reactions.deleteForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      reaction_id: reactionId
+    });
+  } catch {
+  }
+}
+function formatAuditLog(auditEntry) {
+  return `
+
+<details><summary>\u{1F916} Agent Decision Log</summary>
 
 \`\`\`json
 ` + JSON.stringify(auditEntry, null, 2) + "\n```\n</details>";
-  await createComment(octokit, ref, comment);
 }
 async function searchDuplicates(octokit, ref, title, body) {
   const keywords = title.toLowerCase().split(/\s+/).filter((w) => w.length > 3).slice(0, 5).join(" ");
@@ -32986,6 +33011,9 @@ var core2 = __toESM(require_core(), 1);
 
 // dist/actions/triage-agent/index.js
 async function run() {
+  let eyesReactionId = null;
+  let eyesRef = null;
+  let eyesOctokit = null;
   try {
     const config = getConfig();
     const actor = github.context.actor;
@@ -33019,6 +33047,9 @@ async function run() {
       repo: github.context.repo.repo,
       issueNumber: issue.number
     };
+    eyesOctokit = octokit;
+    eyesRef = ref;
+    eyesReactionId = await addReaction(octokit, ref.owner, ref.repo, ref.issueNumber, "eyes");
     core3.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, ref.owner, ref.repo);
     core3.info("Sanitizing issue content...");
@@ -33202,7 +33233,7 @@ ${issue.body}`, validated.injectionFlagsDetected, [
       `action:${validated.recommendedAction}`,
       ...validated.labels.map((l) => `label:${l}`)
     ], DEFAULT_MODEL);
-    await logAgentDecision(octokit, ref, auditEntry);
+    const auditFooter = formatAuditLog(auditEntry);
     core3.info(`Taking action: ${validated.recommendedAction}`);
     switch (validated.recommendedAction) {
       case "assign-to-agent":
@@ -33224,7 +33255,7 @@ This issue has been assessed as concrete and actionable. Please implement a solu
 3. Includes appropriate tests
 4. Updates documentation if needed
         `.trim();
-        await assignToCodingAgent(octokit, ref, assignmentInstructions);
+        await assignToCodingAgent(octokit, ref, assignmentInstructions + auditFooter);
         core3.info(`Assigned issue #${issue.number} to Copilot coding agent`);
         break;
       case "request-clarification":
@@ -33240,7 +33271,7 @@ Could you help clarify:
 
 Once I have a clearer picture, I can get this moving forward.
         `.trim();
-        await requestClarification(octokit, ref, clarificationQuestions);
+        await requestClarification(octokit, ref, clarificationQuestions + auditFooter);
         core3.info(`Requested clarification on issue #${issue.number}`);
         break;
       case "close-as-wontfix":
@@ -33248,7 +33279,7 @@ Once I have a clearer picture, I can get this moving forward.
 
 ${validated.visionAlignmentReason}
 
-Feel free to open a new issue if you think there's a different angle worth exploring.`, "not_planned");
+Feel free to open a new issue if you think there's a different angle worth exploring.` + auditFooter, "not_planned");
         core3.info(`Closed issue #${issue.number} as won't fix (vision misalignment)`);
         break;
       case "close-as-duplicate":
@@ -33257,7 +33288,7 @@ Feel free to open a new issue if you think there's a different angle worth explo
 ${validated.reasoning}
 
 Closing this to consolidate the conversation.`;
-        await closeIssue(octokit, ref, duplicateMsg, "not_planned");
+        await closeIssue(octokit, ref, duplicateMsg + auditFooter, "not_planned");
         core3.info(`Closed issue #${issue.number} as duplicate`);
         break;
       case "create-sub-issues":
@@ -33288,7 +33319,7 @@ This issue was created from research report #${issue.number}. Implement accordin
             await assignToCodingAgent(octokit, subRef, instructions2);
             core3.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
           }
-          await closeIssue(octokit, ref, `Great research! I've broken this down into ${createdIssues.length} focused issues (${createdIssues.map((n) => `#${n}`).join(", ")}) and assigned them for implementation. Closing this one since all the actionable items are now being tracked separately.`, "completed");
+          await closeIssue(octokit, ref, `Great research! I've broken this down into ${createdIssues.length} focused issues (${createdIssues.map((n) => `#${n}`).join(", ")}) and assigned them for implementation. Closing this one since all the actionable items are now being tracked separately.` + auditFooter, "completed");
           core3.info(`Closed parent issue #${issue.number} after creating sub-issues`);
         } else {
           core3.warning(`Unable to generate sub-issues for research report`);
@@ -33298,7 +33329,7 @@ ${validated.summary}
 
 ${validated.reasoning}
 
-I tried to break this down into separate issues for each recommendation, but ran into some trouble doing that automatically. Could a maintainer take a look and create focused issues for each actionable item? That'll help us track and implement them properly.`);
+I tried to break this down into separate issues for each recommendation, but ran into some trouble doing that automatically. Could a maintainer take a look and create focused issues for each actionable item? That'll help us track and implement them properly.` + auditFooter);
         }
         break;
       case "human-review":
@@ -33318,7 +33349,7 @@ ${validated.visionAlignmentReason}
 I've flagged this as **${validated.classification}** with **${validated.priority}** priority. A maintainer will review this soon to decide on next steps.
 ${validated.injectionFlagsDetected.length > 0 ? `
 \u26A0\uFE0F *Note: Some content in this issue was flagged for review: ${validated.injectionFlagsDetected.join(", ")}*` : ""}`;
-        await createComment(octokit, ref, comment2);
+        await createComment(octokit, ref, comment2 + auditFooter);
         core3.info(`Issue #${issue.number} flagged for human review`);
         break;
     }
@@ -33330,6 +33361,9 @@ ${validated.injectionFlagsDetected.length > 0 ? `
       core3.setFailed("An unknown error occurred");
     }
   } finally {
+    if (eyesReactionId && eyesOctokit && eyesRef) {
+      await removeReaction(eyesOctokit, eyesRef.owner, eyesRef.repo, eyesRef.issueNumber, eyesReactionId);
+    }
     try {
       await stopCopilotClient();
     } catch {

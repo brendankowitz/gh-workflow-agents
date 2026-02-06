@@ -31680,12 +31680,37 @@ async function createComment(octokit, ref, body) {
   });
   return response.data.id;
 }
-async function logAgentDecision(octokit, ref, auditEntry) {
-  const comment = `<details><summary>\u2728 Agent Decision Log</summary>
+async function addReaction(octokit, owner, repo, issueNumber, content) {
+  try {
+    const response = await octokit.rest.reactions.createForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      content
+    });
+    return response.data.id;
+  } catch {
+    return null;
+  }
+}
+async function removeReaction(octokit, owner, repo, issueNumber, reactionId) {
+  try {
+    await octokit.rest.reactions.deleteForIssue({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      reaction_id: reactionId
+    });
+  } catch {
+  }
+}
+function formatAuditLog(auditEntry) {
+  return `
+
+<details><summary>\u{1F916} Agent Decision Log</summary>
 
 \`\`\`json
 ` + JSON.stringify(auditEntry, null, 2) + "\n```\n</details>";
-  await createComment(octokit, ref, comment);
 }
 async function getPullRequestDiff(octokit, ref) {
   const response = await octokit.rest.pulls.get({
@@ -37533,6 +37558,11 @@ async function getOctokitWithAppFallback(fallbackToken) {
 
 // dist/actions/review-agent/index.js
 async function run() {
+  let eyesReactionId = null;
+  let eyesOwner = "";
+  let eyesRepo = "";
+  let eyesPrNumber = 0;
+  let eyesOctokit = null;
   process.on("uncaughtException", (error3) => {
     if (error3.message?.includes("stream") || error3.message?.includes("ERR_STREAM_DESTROYED")) {
       core3.warning(`Suppressed async SDK error: ${error3.message}`);
@@ -37544,12 +37574,15 @@ async function run() {
   try {
     const config = getConfig();
     const actor = github.context.actor;
+    const eventName = github.context.eventName;
     const isCopilotActor = actor.toLowerCase() === "copilot-swe-agent";
-    if (isBot(actor) && !isCopilotActor) {
+    if (isBot(actor) && !isCopilotActor && eventName !== "workflow_dispatch") {
       core3.info(`Skipping review for bot actor: ${actor}`);
       return;
     }
-    if (isCopilotActor) {
+    if (eventName === "workflow_dispatch") {
+      core3.info(`Review triggered via workflow_dispatch (actor: ${actor})`);
+    } else if (isCopilotActor) {
       core3.info(`Reviewing Copilot-generated PR from: ${actor}`);
     }
     const circuitBreaker = createCircuitBreakerContext();
@@ -37573,6 +37606,11 @@ async function run() {
       repo: github.context.repo.repo,
       pullNumber: pr.number
     };
+    eyesOctokit = octokit;
+    eyesOwner = ref.owner;
+    eyesRepo = ref.repo;
+    eyesPrNumber = ref.pullNumber;
+    eyesReactionId = await addReaction(octokit, ref.owner, ref.repo, ref.pullNumber, "eyes");
     const isDependabot = await isDependabotPR(octokit, ref);
     if (isDependabot && config.autoApproveDependabot) {
       core3.info("Dependabot PR detected - applying lighter review");
@@ -37643,7 +37681,18 @@ async function run() {
         core3.setOutput("review-result", "auto-approved-loop-break");
         if (config.autoMerge) {
           try {
-            const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some((l) => l.name === "agent-coded") || false;
+            let hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some((l) => l.name === "agent-coded") || false;
+            if (!hasAgentCodedLabel) {
+              try {
+                const { data: prData } = await octokit.rest.pulls.get({
+                  owner: ref.owner,
+                  repo: ref.repo,
+                  pull_number: ref.pullNumber
+                });
+                hasAgentCodedLabel = prData.labels.some((l) => l.name === "agent-coded");
+              } catch {
+              }
+            }
             if (hasAgentCodedLabel) {
               core3.info("PR has agent-coded label and was auto-approved - attempting auto-merge");
               const mergeResult = await mergePullRequest(octokit, ref);
@@ -37664,11 +37713,32 @@ async function run() {
     } catch (err) {
       core3.warning(`Could not check for duplicate reviews: ${err instanceof Error ? err.message : String(err)}`);
     }
+    const auditEntry = createAuditEntry("review-agent", `${pr.title}
+${diff.substring(0, 1e3)}`, [
+      ...sanitizedTitle.detectedPatterns,
+      ...sanitizedBody.detectedPatterns
+    ], [
+      `assessment:${validated.overallAssessment}`,
+      `security-issues:${validated.securityIssues.length}`,
+      `quality-issues:${validated.codeQualityIssues.length}`
+    ], DEFAULT_MODEL);
+    const reviewBodyWithLog = reviewBody + formatAuditLog(auditEntry);
     core3.info(`Posting review with assessment: ${validated.overallAssessment}`);
-    await createPullRequestReview(reviewOctokit, ref, event, reviewBody, inlineComments);
+    await createPullRequestReview(reviewOctokit, ref, event, reviewBodyWithLog, inlineComments);
     if (event === "APPROVE" && config.autoMerge) {
       try {
-        const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some((l) => l.name === "agent-coded") || false;
+        let hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some((l) => l.name === "agent-coded") || false;
+        if (!hasAgentCodedLabel) {
+          try {
+            const { data: prData } = await octokit.rest.pulls.get({
+              owner: ref.owner,
+              repo: ref.repo,
+              pull_number: ref.pullNumber
+            });
+            hasAgentCodedLabel = prData.labels.some((l) => l.name === "agent-coded");
+          } catch {
+          }
+        }
         if (hasAgentCodedLabel) {
           core3.info("PR has agent-coded label and was approved - attempting auto-merge");
           const mergeResult = await mergePullRequest(octokit, ref);
@@ -37708,16 +37778,6 @@ This may be due to merge conflicts or failing status checks. To resolve, comment
         core3.warning(`Failed to post @copilot mention: ${error3 instanceof Error ? error3.message : error3}`);
       }
     }
-    const auditEntry = createAuditEntry("review-agent", `${pr.title}
-${diff.substring(0, 1e3)}`, [
-      ...sanitizedTitle.detectedPatterns,
-      ...sanitizedBody.detectedPatterns
-    ], [
-      `assessment:${validated.overallAssessment}`,
-      `security-issues:${validated.securityIssues.length}`,
-      `quality-issues:${validated.codeQualityIssues.length}`
-    ], DEFAULT_MODEL);
-    await logAgentDecision(octokit, { ...ref, issueNumber: pr.number }, auditEntry);
     core3.info("Review complete");
   } catch (error3) {
     if (error3 instanceof Error) {
@@ -37726,6 +37786,9 @@ ${diff.substring(0, 1e3)}`, [
       core3.setFailed("An unknown error occurred");
     }
   } finally {
+    if (eyesReactionId && eyesOctokit) {
+      await removeReaction(eyesOctokit, eyesOwner, eyesRepo, eyesPrNumber, eyesReactionId);
+    }
     try {
       await stopCopilotClient();
     } catch {
