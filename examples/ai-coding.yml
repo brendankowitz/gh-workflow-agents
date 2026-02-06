@@ -92,10 +92,14 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'ai-review.yml',
-              ref: context.ref,
+              ref: repo.default_branch,
               inputs: { pr_number: String(${{ steps.code.outputs.pr-number }}) }
             });
