@@ -33945,12 +33945,8 @@ async function commitAndPushWithGit(changes, task, config) {
     for (const { label, token } of tokensToTry) {
       try {
         if (token) {
-          const authUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
-          execSync(`git remote set-url origin "${authUrl}"`, {
-            cwd: workspace,
-            encoding: "utf-8",
-            stdio: ["pipe", "pipe", "pipe"]
-          });
+          const basicAuth = Buffer.from(`x-access-token:${token}`).toString("base64");
+          execSync(`git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basicAuth}"`, { cwd: workspace, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
           core3.info(`  Pushing with ${label}...`);
         } else {
           core3.info(`  Pushing with ${label} (already configured)...`);

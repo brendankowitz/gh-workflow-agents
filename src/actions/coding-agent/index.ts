@@ -2028,13 +2028,14 @@ async function commitAndPushWithGit(
     for (const { label, token } of tokensToTry) {
       try {
         if (token) {
-          // Reconfigure the remote URL with this token
-          const authUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
-          execSync(`git remote set-url origin "${authUrl}"`, {
-            cwd: workspace,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
+          // Override the extraheader that actions/checkout configured.
+          // actions/checkout uses http.extraheader for auth, not the remote URL,
+          // so git remote set-url alone doesn't change the auth token.
+          const basicAuth = Buffer.from(`x-access-token:${token}`).toString('base64');
+          execSync(
+            `git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basicAuth}"`,
+            { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+          );
           core.info(`  Pushing with ${label}...`);
         } else {
           core.info(`  Pushing with ${label} (already configured)...`);
