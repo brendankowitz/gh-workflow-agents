@@ -19,8 +19,13 @@ import {
 import {
   createOctokit,
   loadRepositoryContext,
+  formatContextForPrompt,
   createAuditEntry,
   logAgentDecision,
+  createComment,
+  sendPrompt,
+  parseAgentResponse,
+  hasCopilotAuth,
   type IssueRef,
 } from '../../sdk/index.js';
 
@@ -34,6 +39,10 @@ interface ResearchConfig {
   createActionableIssues: boolean;
   /** Minimum priority level for creating individual issues ('low', 'medium', 'high', 'critical') */
   minPriorityForIssue: 'low' | 'medium' | 'high' | 'critical';
+  /** Issue number for issue-focused mode */
+  issueNumber?: number;
+  /** Research mode: 'scheduled' (weekly report) or 'issue-focused' (targeted analysis) */
+  mode: 'scheduled' | 'issue-focused';
 }
 
 /** Actionable recommendation extracted from research */
@@ -65,6 +74,13 @@ export async function run(): Promise<void> {
     // Load repository context
     core.info('Loading repository context...');
     const repoContext = await loadRepositoryContext(octokit, owner, repo);
+
+    // Issue-focused mode: targeted research for a specific issue
+    if (config.mode === 'issue-focused' && config.issueNumber) {
+      core.info(`Running issue-focused research for issue #${config.issueNumber}...`);
+      await runIssueFocusedResearch(octokit, owner, repo, config, repoContext);
+      return;
+    }
 
     // Perform research analysis
     core.info('Analyzing repository health...');
@@ -146,6 +162,10 @@ function getConfig(): ResearchConfig {
   const minPriority = core.getInput('min-priority-for-issue') || 'high';
   const validPriorities = ['low', 'medium', 'high', 'critical'];
 
+  const issueNumberInput = core.getInput('issue-number');
+  const issueNumber = issueNumberInput ? parseInt(issueNumberInput, 10) : undefined;
+  const mode = (core.getInput('mode') || 'scheduled') as 'scheduled' | 'issue-focused';
+
   return {
     githubToken: core.getInput('github-token', { required: true }),
     model: core.getInput('model') || 'claude-sonnet-4.5',
@@ -155,6 +175,8 @@ function getConfig(): ResearchConfig {
     minPriorityForIssue: validPriorities.includes(minPriority)
       ? (minPriority as 'low' | 'medium' | 'high' | 'critical')
       : 'high',
+    issueNumber: issueNumber && !isNaN(issueNumber) ? issueNumber : undefined,
+    mode,
   };
 }
 
@@ -1115,6 +1137,256 @@ function getLabelColor(label: string): string {
   };
 
   return colorMap[label] || 'ededed';
+}
+
+/**
+ * Runs issue-focused research for a specific issue
+ * Fetches the issue, performs targeted research, posts findings, and sets outputs for chaining
+ */
+async function runIssueFocusedResearch(
+  octokit: ReturnType<typeof createOctokit>,
+  owner: string,
+  repo: string,
+  config: ResearchConfig,
+  repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>
+): Promise<void> {
+  const issueNumber = config.issueNumber!;
+  const ref: IssueRef = { owner, repo, issueNumber };
+
+  // Fetch the issue
+  const { data: issue } = await octokit.rest.issues.get({
+    owner,
+    repo,
+    issue_number: issueNumber,
+  });
+
+  core.info(`Researching issue #${issueNumber}: ${issue.title}`);
+
+  // Perform targeted research
+  const findings = await analyzeIssueContext(
+    octokit,
+    owner,
+    repo,
+    issue.title,
+    issue.body || '',
+    repoContext,
+    config
+  );
+
+  // Post findings as a structured comment
+  const comment = buildIssueResearchComment(findings, issue.title);
+  await createComment(octokit, ref, comment);
+  core.info(`Posted research findings on issue #${issueNumber}`);
+
+  // Remove ready-for-research label and prepare for coding
+  try {
+    await octokit.rest.issues.removeLabel({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      name: 'ready-for-research',
+    });
+  } catch {
+    // Label may not exist
+  }
+
+  // Set outputs for chaining to coding agent
+  core.setOutput('recommended-action', 'assign-to-agent');
+  core.setOutput('issue-number', String(issueNumber));
+
+  // Log audit entry
+  const auditEntry = createAuditEntry(
+    'research-agent',
+    `issue-focused:${issueNumber}`,
+    [],
+    [
+      `mode:issue-focused`,
+      `issue:${issueNumber}`,
+      `findings:${findings.keyFindings.length}`,
+      `recommendations:${findings.recommendations.length}`,
+    ],
+    DEFAULT_MODEL
+  );
+  await logAgentDecision(octokit, ref, auditEntry);
+
+  core.info(`Issue-focused research complete for #${issueNumber}`);
+}
+
+/** Issue research findings */
+interface IssueResearchFindings {
+  issueAnalysis: string;
+  keyFindings: string[];
+  recommendations: string[];
+  similarApproaches: string[];
+  risks: string[];
+}
+
+/**
+ * Performs targeted research for a specific issue
+ * Uses AI to analyze the issue and generate research findings
+ */
+async function analyzeIssueContext(
+  octokit: ReturnType<typeof createOctokit>,
+  owner: string,
+  repo: string,
+  issueTitle: string,
+  issueBody: string,
+  repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>,
+  config: ResearchConfig
+): Promise<IssueResearchFindings> {
+  const contextSection = formatContextForPrompt(repoContext);
+
+  // Search for similar repos/approaches
+  const similarRepos = await searchRelatedRepositories(octokit, issueTitle);
+
+  // Try AI-powered analysis first
+  if (hasCopilotAuth()) {
+    try {
+      const prompt = `You are a research analyst investigating a GitHub issue before implementation.
+
+## Project Context
+${contextSection}
+
+## Issue to Research
+**Title:** ${issueTitle}
+
+**Description:**
+${issueBody}
+
+## Similar Projects Found
+${similarRepos.length > 0 ? similarRepos.map(r => `- ${r.fullName} (${r.stars} stars): ${r.description}`).join('\n') : 'None found'}
+
+## Task
+Analyze this issue and provide research findings to help the coding agent implement it effectively.
+
+CRITICAL: Respond with ONLY a JSON object. No explanatory text.
+
+{
+  "issueAnalysis": "Brief analysis of what this issue is asking for and why",
+  "keyFindings": ["Finding 1", "Finding 2"],
+  "recommendations": ["Recommendation for implementation approach"],
+  "similarApproaches": ["How similar projects handle this"],
+  "risks": ["Potential risks or gotchas to watch for"]
+}`;
+
+      const response = await sendPrompt(
+        'You are a technical research analyst. Output ONLY valid JSON.',
+        prompt,
+        { model: config.model }
+      );
+
+      if (response.content) {
+        const parsed = parseAgentResponse<IssueResearchFindings>(response.content);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    } catch (error) {
+      core.warning(`AI analysis failed, using heuristic fallback: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // Fallback: heuristic-based analysis
+  return {
+    issueAnalysis: `Issue "${issueTitle}" requires implementation analysis.`,
+    keyFindings: [
+      `Issue involves: ${issueTitle}`,
+      ...(similarRepos.length > 0
+        ? [`Similar projects found: ${similarRepos.map(r => r.fullName).join(', ')}`]
+        : []),
+    ],
+    recommendations: [
+      'Review existing codebase patterns before implementing',
+      'Consider writing tests alongside the implementation',
+    ],
+    similarApproaches: similarRepos.map(r => `${r.fullName}: ${r.description}`),
+    risks: ['Verify compatibility with existing code before merging'],
+  };
+}
+
+/**
+ * Searches for repositories related to the issue topic
+ */
+async function searchRelatedRepositories(
+  octokit: ReturnType<typeof createOctokit>,
+  issueTitle: string
+): Promise<Array<{ fullName: string; stars: number; description: string }>> {
+  try {
+    const keywords = issueTitle
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !['that', 'this', 'with', 'from', 'should', 'would', 'could'].includes(w))
+      .slice(0, 3)
+      .join(' ');
+
+    if (!keywords) return [];
+
+    const response = await octokit.rest.search.repos({
+      q: `${keywords} stars:>50`,
+      sort: 'stars',
+      order: 'desc',
+      per_page: 5,
+    });
+
+    return response.data.items.map(r => ({
+      fullName: r.full_name,
+      stars: r.stargazers_count,
+      description: r.description || '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Formats research findings as a structured GitHub comment
+ */
+function buildIssueResearchComment(
+  findings: IssueResearchFindings,
+  issueTitle: string
+): string {
+  const sections: string[] = [];
+
+  sections.push(`## 🔍 AI Research Agent Findings\n`);
+  sections.push(`*Research analysis for: "${issueTitle}"*\n`);
+
+  sections.push(`### Analysis\n${findings.issueAnalysis}\n`);
+
+  if (findings.keyFindings.length > 0) {
+    sections.push(`### Key Findings\n`);
+    for (const finding of findings.keyFindings) {
+      sections.push(`- ${finding}`);
+    }
+    sections.push('');
+  }
+
+  if (findings.similarApproaches.length > 0) {
+    sections.push(`### Similar Approaches\n`);
+    for (const approach of findings.similarApproaches) {
+      sections.push(`- ${approach}`);
+    }
+    sections.push('');
+  }
+
+  if (findings.recommendations.length > 0) {
+    sections.push(`### Recommendations\n`);
+    for (const rec of findings.recommendations) {
+      sections.push(`- ${rec}`);
+    }
+    sections.push('');
+  }
+
+  if (findings.risks.length > 0) {
+    sections.push(`### Risks & Considerations\n`);
+    for (const risk of findings.risks) {
+      sections.push(`- ⚠️ ${risk}`);
+    }
+    sections.push('');
+  }
+
+  sections.push(`---\n*The coding agent will use these findings during implementation.*`);
+
+  return sections.join('\n');
 }
 
 // Run the action

@@ -31,6 +31,7 @@ export {
   searchDuplicates,
   createAuditEntry,
   assignToCodingAgent,
+  assignToResearchAgent,
   requestClarification,
   closeIssue,
   closeLinkedIssue,

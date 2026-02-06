@@ -341,7 +341,11 @@ export async function run(): Promise<void> {
       task,
       config
     );
-    core.info(`Committed to branch: ${commitResult.branchName}`);
+    if (commitResult.pushedSuccessfully) {
+      core.info(`Committed and pushed to branch: ${commitResult.branchName}`);
+    } else {
+      core.error(`Failed to push to branch: ${commitResult.branchName}`);
+    }
 
     // Phase 5: Manage PR (create or update)
     core.info('Phase 5: Managing pull request...');
@@ -466,10 +470,17 @@ async function getTaskFromContext(
           repo: github.context.repo.repo,
           issue_number: issueNumber,
         });
+
+        // Check for research agent findings in issue comments
+        const researchFindings = await fetchResearchFindings(octokit, issueNumber);
+        const content = researchFindings
+          ? `${issue.title}\n\n${issue.body || ''}\n\n---\n\n${researchFindings}`
+          : `${issue.title}\n\n${issue.body || ''}`;
+
         return {
           type: 'issue',
           issueNumber: issue.number,
-          content: `${issue.title}\n\n${issue.body || ''}`,
+          content,
         };
       } catch (error) {
         core.warning(`Failed to fetch issue #${issueNumberInput}: ${error instanceof Error ? error.message : String(error)}`);
@@ -756,6 +767,38 @@ async function getTaskFromContext(
 
 /**
  * Checks how many feedback iterations have been attempted on a PR
+ * Fetches research agent findings from issue comments
+ * Looks for comments containing the "AI Research Agent Findings" heading
+ */
+async function fetchResearchFindings(
+  octokit: ReturnType<typeof createOctokit>,
+  issueNumber: number
+): Promise<string | null> {
+  try {
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      issue_number: issueNumber,
+      per_page: 30,
+    });
+
+    // Find the most recent research agent findings comment
+    for (let i = comments.length - 1; i >= 0; i--) {
+      const comment = comments[i];
+      if (comment?.body?.includes('## 🔍 AI Research Agent Findings')) {
+        core.info(`Found research findings in comment #${comment.id} on issue #${issueNumber}`);
+        return comment.body;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    core.warning(`Failed to fetch research findings for issue #${issueNumber}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+/**
  * by counting the number of "Updates Applied" comments from the bot
  */
 async function checkFeedbackLoopIterations(
@@ -1894,7 +1937,10 @@ async function commitAndPush(
 
 /**
  * Last-resort fallback: commit and push using git CLI.
- * Uses the token configured by actions/checkout (COPILOT_GITHUB_TOKEN).
+ * Tries multiple tokens: first the checkout token (already configured),
+ * then GITHUB_TOKEN, then copilotToken — because the checkout token may
+ * lack push access, and the REST API may block workflow file changes that
+ * git push allows.
  */
 async function commitAndPushWithGit(
   changes: CodeChanges,
@@ -1946,7 +1992,7 @@ async function commitAndPushWithGit(
       }
     }
 
-    // Stage, commit, push
+    // Stage, commit
     gitExec('git add -A');
 
     const commitMsg = `${changes.summary || `Agent changes for #${issueOrPrNumber}`}`;
@@ -1958,7 +2004,56 @@ async function commitAndPushWithGit(
       env: { ...process.env, MSG: commitMsg },
     });
 
-    gitExec(`git push origin ${branchName} --force-with-lease`);
+    // Try pushing with multiple tokens.
+    // The checkout token may differ from GITHUB_TOKEN, and the REST API
+    // blocks GITHUB_TOKEN from creating git trees with .github/workflows/ files,
+    // but git push with GITHUB_TOKEN CAN push workflow file changes.
+    const { owner, repo } = github.context.repo;
+    const tokensToTry: Array<{ label: string; token: string }> = [];
+
+    // 1. First try the already-configured checkout token
+    tokensToTry.push({ label: 'checkout token', token: '' }); // empty = use existing config
+
+    // 2. Try GITHUB_TOKEN (may differ from checkout token)
+    if (config.githubToken) {
+      tokensToTry.push({ label: 'GITHUB_TOKEN', token: config.githubToken });
+    }
+
+    // 3. Try copilotToken/PAT
+    if (config.copilotToken && config.copilotToken !== config.githubToken) {
+      tokensToTry.push({ label: 'copilot PAT', token: config.copilotToken });
+    }
+
+    let pushSucceeded = false;
+    for (const { label, token } of tokensToTry) {
+      try {
+        if (token) {
+          // Reconfigure the remote URL with this token
+          const authUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+          execSync(`git remote set-url origin "${authUrl}"`, {
+            cwd: workspace,
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          core.info(`  Pushing with ${label}...`);
+        } else {
+          core.info(`  Pushing with ${label} (already configured)...`);
+        }
+
+        gitExec(`git push origin ${branchName} --force-with-lease`);
+        pushSucceeded = true;
+        core.info(`  Push succeeded with ${label}`);
+        break;
+      } catch (pushError) {
+        const pushMsg = pushError instanceof Error ? pushError.message : String(pushError);
+        core.warning(`  Push failed with ${label}: ${pushMsg.split('\n')[0]}`);
+      }
+    }
+
+    if (!pushSucceeded) {
+      core.error('All git push attempts failed');
+      return { branchName, commitSha: '', pushedSuccessfully: false };
+    }
 
     // Get the commit SHA
     const commitSha = gitExec('git rev-parse HEAD');

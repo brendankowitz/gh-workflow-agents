@@ -32805,7 +32805,11 @@ If you still need changes, please:
     core3.info(`Final result: ${changes.files.length} files generated`);
     core3.info("Phase 4: Committing and pushing changes...");
     const commitResult = await commitAndPush(changes, task, config);
-    core3.info(`Committed to branch: ${commitResult.branchName}`);
+    if (commitResult.pushedSuccessfully) {
+      core3.info(`Committed and pushed to branch: ${commitResult.branchName}`);
+    } else {
+      core3.error(`Failed to push to branch: ${commitResult.branchName}`);
+    }
     core3.info("Phase 5: Managing pull request...");
     const prResult = await managePR(commitResult, task, changes, octokit, config);
     core3.info(`PR ${prResult.status}: ${prResult.prUrl}`);
@@ -32891,12 +32895,20 @@ async function getTaskFromContext(octokit) {
           repo: github.context.repo.repo,
           issue_number: issueNumber
         });
+        const researchFindings = await fetchResearchFindings(octokit, issueNumber);
+        const content = researchFindings ? `${issue.title}
+
+${issue.body || ""}
+
+---
+
+${researchFindings}` : `${issue.title}
+
+${issue.body || ""}`;
         return {
           type: "issue",
           issueNumber: issue.number,
-          content: `${issue.title}
-
-${issue.body || ""}`
+          content
         };
       } catch (error3) {
         core3.warning(`Failed to fetch issue #${issueNumberInput}: ${error3 instanceof Error ? error3.message : String(error3)}`);
@@ -33132,6 +33144,27 @@ ${pr.body || ""}`, "pr-content").sanitized,
     }
   }
   return null;
+}
+async function fetchResearchFindings(octokit, issueNumber) {
+  try {
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      issue_number: issueNumber,
+      per_page: 30
+    });
+    for (let i = comments.length - 1; i >= 0; i--) {
+      const comment = comments[i];
+      if (comment?.body?.includes("## \u{1F50D} AI Research Agent Findings")) {
+        core3.info(`Found research findings in comment #${comment.id} on issue #${issueNumber}`);
+        return comment.body;
+      }
+    }
+    return null;
+  } catch (error3) {
+    core3.warning(`Failed to fetch research findings for issue #${issueNumber}: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    return null;
+  }
 }
 async function checkFeedbackLoopIterations(octokit, prNumber) {
   try {
@@ -33899,7 +33932,42 @@ async function commitAndPushWithGit(changes, task, config) {
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, MSG: commitMsg }
     });
-    gitExec(`git push origin ${branchName} --force-with-lease`);
+    const { owner, repo } = github.context.repo;
+    const tokensToTry = [];
+    tokensToTry.push({ label: "checkout token", token: "" });
+    if (config.githubToken) {
+      tokensToTry.push({ label: "GITHUB_TOKEN", token: config.githubToken });
+    }
+    if (config.copilotToken && config.copilotToken !== config.githubToken) {
+      tokensToTry.push({ label: "copilot PAT", token: config.copilotToken });
+    }
+    let pushSucceeded = false;
+    for (const { label, token } of tokensToTry) {
+      try {
+        if (token) {
+          const authUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+          execSync(`git remote set-url origin "${authUrl}"`, {
+            cwd: workspace,
+            encoding: "utf-8",
+            stdio: ["pipe", "pipe", "pipe"]
+          });
+          core3.info(`  Pushing with ${label}...`);
+        } else {
+          core3.info(`  Pushing with ${label} (already configured)...`);
+        }
+        gitExec(`git push origin ${branchName} --force-with-lease`);
+        pushSucceeded = true;
+        core3.info(`  Push succeeded with ${label}`);
+        break;
+      } catch (pushError) {
+        const pushMsg = pushError instanceof Error ? pushError.message : String(pushError);
+        core3.warning(`  Push failed with ${label}: ${pushMsg.split("\n")[0]}`);
+      }
+    }
+    if (!pushSucceeded) {
+      core3.error("All git push attempts failed");
+      return { branchName, commitSha: "", pushedSuccessfully: false };
+    }
     const commitSha = gitExec("git rev-parse HEAD");
     core3.info(`Git CLI commit successful: ${commitSha}`);
     return { branchName, commitSha, pushedSuccessfully: true };

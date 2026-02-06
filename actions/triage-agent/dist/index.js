@@ -27270,6 +27270,7 @@ var ALLOWED_LABELS = [
   "ready-for-agent",
   "assigned-to-agent",
   "agent-coded",
+  "ready-for-research",
   "has-sub-issues",
   "triaged",
   "stale",
@@ -27436,7 +27437,7 @@ function validateTriageOutput(output) {
   const alignsWithVision = parsed["alignsWithVision"] !== false;
   const actionabilityReason = sanitizeTextField(String(parsed["actionabilityReason"] || ""), MAX_TEXT_LENGTH.reasoning);
   const visionAlignmentReason = sanitizeTextField(String(parsed["visionAlignmentReason"] || ""), MAX_TEXT_LENGTH.reasoning);
-  const allowedActions = ["assign-to-agent", "request-clarification", "close-as-wontfix", "close-as-duplicate", "human-review"];
+  const allowedActions = ["assign-to-agent", "request-clarification", "close-as-wontfix", "close-as-duplicate", "human-review", "create-sub-issues", "route-to-research"];
   const rawAction = String(parsed["recommendedAction"] || "human-review").toLowerCase();
   const recommendedAction = allowedActions.includes(rawAction) ? rawAction : "human-review";
   const injectionFlagsDetected = [];
@@ -31328,6 +31329,28 @@ ${instructions}
 *The coding agent will create a pull request to address this issue.*`
   });
 }
+async function assignToResearchAgent(octokit, ref, instructions) {
+  await octokit.rest.issues.addLabels({
+    owner: ref.owner,
+    repo: ref.repo,
+    issue_number: ref.issueNumber,
+    labels: ["ready-for-research", "status:in-progress"]
+  });
+  await octokit.rest.issues.createComment({
+    owner: ref.owner,
+    repo: ref.repo,
+    issue_number: ref.issueNumber,
+    body: `## \u{1F50D} Assigned to AI Research Agent
+
+This issue will be analyzed for current best practices, framework standards, and engineering health before implementation.
+
+**Instructions:**
+${instructions}
+
+---
+*The research agent will post findings, then hand off to the coding agent.*`
+  });
+}
 async function requestClarification(octokit, ref, questions) {
   await octokit.rest.issues.addLabels({
     owner: ref.owner,
@@ -33114,6 +33137,7 @@ MANDATORY RULES:
 Action definitions:
 - **create-sub-issues**: DEFAULT for research reports. Break into focused issues for each recommendation.
 - **assign-to-agent**: Single actionable issue that aligns with vision
+- **route-to-research**: Issue needs research analysis first (tech debt assessment, framework/standards evaluation, engineering system health, best practices review, or when current information beyond training data is needed)
 - **request-clarification**: Issue is too ambiguous (isActionable=false)
 - **close-as-wontfix**: Issue clearly conflicts with project vision (alignsWithVision=false)
 - **close-as-duplicate**: Feature/fix already exists in codebase
@@ -33157,7 +33181,7 @@ CRITICAL: Respond with ONLY a JSON object. No explanatory text. Start with { and
   "actionabilityReason": "Why this is/isn't actionable, referencing specific code",
   "alignsWithVision": true | false,
   "visionAlignmentReason": "How this aligns or conflicts with project vision",
-  "recommendedAction": "assign-to-agent" | "create-sub-issues" | "request-clarification" | "close-as-wontfix" | "close-as-duplicate" | "human-review",
+  "recommendedAction": "assign-to-agent" | "create-sub-issues" | "route-to-research" | "request-clarification" | "close-as-wontfix" | "close-as-duplicate" | "human-review",
   "filesExamined": ["src/config.ts", "src/anonymizer.ts"],
   "filesToModify": ["src/config/uscdi-v4.json", "src/validators/uscdi.ts"],
   "subIssues": [
@@ -33242,6 +33266,28 @@ This issue has been assessed as concrete and actionable. Please implement a solu
         `.trim();
         await assignToCodingAgent(octokit, ref, assignmentInstructions + auditFooter);
         core3.info(`Assigned issue #${issue.number} to AI coding agent`);
+        break;
+      case "route-to-research":
+        const researchInstructions = `
+## Issue Summary
+${validated.summary}
+
+## Classification
+- **Type:** ${validated.classification}
+- **Priority:** ${validated.priority}
+
+## Context
+${validated.reasoning}
+
+## Research Focus
+This issue requires research analysis before implementation. Please investigate:
+1. Current best practices and standards relevant to this issue
+2. Similar approaches in other projects
+3. Technical feasibility and recommended approach
+4. Any risks or considerations for implementation
+        `.trim();
+        await assignToResearchAgent(octokit, ref, researchInstructions + auditFooter);
+        core3.info(`Routed issue #${issue.number} to AI research agent`);
         break;
       case "request-clarification":
         const clarificationQuestions = `

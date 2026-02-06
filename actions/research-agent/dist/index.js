@@ -27377,6 +27377,29 @@ function truncateContent(content, maxFileSize, remainingBudget) {
   }
   return truncated + "\n\n[...content truncated for context limits...]";
 }
+function formatContextForPrompt(context2) {
+  const sections = [];
+  sections.push(`# Repository: ${context2.owner}/${context2.name}`);
+  if (context2.vision) {
+    sections.push("## Project Vision\n" + context2.vision);
+  }
+  if (context2.readme) {
+    sections.push("## README (Project Overview)\n" + context2.readme);
+  }
+  if (context2.contributing) {
+    sections.push("## Contributing Guidelines\n" + context2.contributing);
+  }
+  if (context2.architecture) {
+    sections.push("## Architecture\n" + context2.architecture);
+  }
+  if (context2.roadmap) {
+    sections.push("## Roadmap\n" + context2.roadmap);
+  }
+  if (sections.length === 1) {
+    sections.push("\n*No vision or context documents found in repository. Using generic open source project guidelines.*");
+  }
+  return sections.join("\n\n");
+}
 
 // node_modules/@octokit/rest/node_modules/universal-user-agent/index.js
 function getUserAgent() {
@@ -30967,9 +30990,1489 @@ function createAuditEntry(agent, rawInput, injectionFlags, actions, model) {
 
 // node_modules/@github/copilot-sdk/dist/client.js
 var import_node = __toESM(require_node(), 1);
+import { spawn } from "node:child_process";
+import { Socket } from "node:net";
+
+// node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js
+var SDK_PROTOCOL_VERSION = 2;
+function getSdkProtocolVersion() {
+  return SDK_PROTOCOL_VERSION;
+}
+
+// node_modules/@github/copilot-sdk/dist/session.js
+var CopilotSession = class {
+  /**
+   * Creates a new CopilotSession instance.
+   *
+   * @param sessionId - The unique identifier for this session
+   * @param connection - The JSON-RPC message connection to the Copilot CLI
+   * @param workspacePath - Path to the session workspace directory (when infinite sessions enabled)
+   * @internal This constructor is internal. Use {@link CopilotClient.createSession} to create sessions.
+   */
+  constructor(sessionId, connection, _workspacePath) {
+    this.sessionId = sessionId;
+    this.connection = connection;
+    this._workspacePath = _workspacePath;
+  }
+  eventHandlers = /* @__PURE__ */ new Set();
+  typedEventHandlers = /* @__PURE__ */ new Map();
+  toolHandlers = /* @__PURE__ */ new Map();
+  permissionHandler;
+  userInputHandler;
+  hooks;
+  /**
+   * Path to the session workspace directory when infinite sessions are enabled.
+   * Contains checkpoints/, plan.md, and files/ subdirectories.
+   * Undefined if infinite sessions are disabled.
+   */
+  get workspacePath() {
+    return this._workspacePath;
+  }
+  /**
+   * Sends a message to this session and waits for the response.
+   *
+   * The message is processed asynchronously. Subscribe to events via {@link on}
+   * to receive streaming responses and other session events.
+   *
+   * @param options - The message options including the prompt and optional attachments
+   * @returns A promise that resolves with the message ID of the response
+   * @throws Error if the session has been destroyed or the connection fails
+   *
+   * @example
+   * ```typescript
+   * const messageId = await session.send({
+   *   prompt: "Explain this code",
+   *   attachments: [{ type: "file", path: "./src/index.ts" }]
+   * });
+   * ```
+   */
+  async send(options) {
+    const response = await this.connection.sendRequest("session.send", {
+      sessionId: this.sessionId,
+      prompt: options.prompt,
+      attachments: options.attachments,
+      mode: options.mode
+    });
+    return response.messageId;
+  }
+  /**
+   * Sends a message to this session and waits until the session becomes idle.
+   *
+   * This is a convenience method that combines {@link send} with waiting for
+   * the `session.idle` event. Use this when you want to block until the
+   * assistant has finished processing the message.
+   *
+   * Events are still delivered to handlers registered via {@link on} while waiting.
+   *
+   * @param options - The message options including the prompt and optional attachments
+   * @param timeout - Timeout in milliseconds (default: 60000). Controls how long to wait; does not abort in-flight agent work.
+   * @returns A promise that resolves with the final assistant message when the session becomes idle,
+   *          or undefined if no assistant message was received
+   * @throws Error if the timeout is reached before the session becomes idle
+   * @throws Error if the session has been destroyed or the connection fails
+   *
+   * @example
+   * ```typescript
+   * // Send and wait for completion with default 60s timeout
+   * const response = await session.sendAndWait({ prompt: "What is 2+2?" });
+   * console.log(response?.data.content); // "4"
+   * ```
+   */
+  async sendAndWait(options, timeout) {
+    const effectiveTimeout = timeout ?? 6e4;
+    let resolveIdle;
+    let rejectWithError;
+    const idlePromise = new Promise((resolve, reject) => {
+      resolveIdle = resolve;
+      rejectWithError = reject;
+    });
+    let lastAssistantMessage;
+    const unsubscribe = this.on((event) => {
+      if (event.type === "assistant.message") {
+        lastAssistantMessage = event;
+      } else if (event.type === "session.idle") {
+        resolveIdle();
+      } else if (event.type === "session.error") {
+        const error2 = new Error(event.data.message);
+        error2.stack = event.data.stack;
+        rejectWithError(error2);
+      }
+    });
+    try {
+      await this.send(options);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(
+            new Error(
+              `Timeout after ${effectiveTimeout}ms waiting for session.idle`
+            )
+          ),
+          effectiveTimeout
+        );
+      });
+      await Promise.race([idlePromise, timeoutPromise]);
+      return lastAssistantMessage;
+    } finally {
+      unsubscribe();
+    }
+  }
+  on(eventTypeOrHandler, handler2) {
+    if (typeof eventTypeOrHandler === "string" && handler2) {
+      const eventType = eventTypeOrHandler;
+      if (!this.typedEventHandlers.has(eventType)) {
+        this.typedEventHandlers.set(eventType, /* @__PURE__ */ new Set());
+      }
+      const storedHandler = handler2;
+      this.typedEventHandlers.get(eventType).add(storedHandler);
+      return () => {
+        const handlers = this.typedEventHandlers.get(eventType);
+        if (handlers) {
+          handlers.delete(storedHandler);
+        }
+      };
+    }
+    const wildcardHandler = eventTypeOrHandler;
+    this.eventHandlers.add(wildcardHandler);
+    return () => {
+      this.eventHandlers.delete(wildcardHandler);
+    };
+  }
+  /**
+   * Dispatches an event to all registered handlers.
+   *
+   * @param event - The session event to dispatch
+   * @internal This method is for internal use by the SDK.
+   */
+  _dispatchEvent(event) {
+    const typedHandlers = this.typedEventHandlers.get(event.type);
+    if (typedHandlers) {
+      for (const handler2 of typedHandlers) {
+        try {
+          handler2(event);
+        } catch (_error) {
+        }
+      }
+    }
+    for (const handler2 of this.eventHandlers) {
+      try {
+        handler2(event);
+      } catch (_error) {
+      }
+    }
+  }
+  /**
+   * Registers custom tool handlers for this session.
+   *
+   * Tools allow the assistant to execute custom functions. When the assistant
+   * invokes a tool, the corresponding handler is called with the tool arguments.
+   *
+   * @param tools - An array of tool definitions with their handlers, or undefined to clear all tools
+   * @internal This method is typically called internally when creating a session with tools.
+   */
+  registerTools(tools) {
+    this.toolHandlers.clear();
+    if (!tools) {
+      return;
+    }
+    for (const tool of tools) {
+      this.toolHandlers.set(tool.name, tool.handler);
+    }
+  }
+  /**
+   * Retrieves a registered tool handler by name.
+   *
+   * @param name - The name of the tool to retrieve
+   * @returns The tool handler if found, or undefined
+   * @internal This method is for internal use by the SDK.
+   */
+  getToolHandler(name) {
+    return this.toolHandlers.get(name);
+  }
+  /**
+   * Registers a handler for permission requests.
+   *
+   * When the assistant needs permission to perform certain actions (e.g., file operations),
+   * this handler is called to approve or deny the request.
+   *
+   * @param handler - The permission handler function, or undefined to remove the handler
+   * @internal This method is typically called internally when creating a session.
+   */
+  registerPermissionHandler(handler2) {
+    this.permissionHandler = handler2;
+  }
+  /**
+   * Registers a user input handler for ask_user requests.
+   *
+   * When the agent needs input from the user (via ask_user tool),
+   * this handler is called to provide the response.
+   *
+   * @param handler - The user input handler function, or undefined to remove the handler
+   * @internal This method is typically called internally when creating a session.
+   */
+  registerUserInputHandler(handler2) {
+    this.userInputHandler = handler2;
+  }
+  /**
+   * Registers hook handlers for session lifecycle events.
+   *
+   * Hooks allow custom logic to be executed at various points during
+   * the session lifecycle (before/after tool use, session start/end, etc.).
+   *
+   * @param hooks - The hook handlers object, or undefined to remove all hooks
+   * @internal This method is typically called internally when creating a session.
+   */
+  registerHooks(hooks) {
+    this.hooks = hooks;
+  }
+  /**
+   * Handles a permission request from the Copilot CLI.
+   *
+   * @param request - The permission request data from the CLI
+   * @returns A promise that resolves with the permission decision
+   * @internal This method is for internal use by the SDK.
+   */
+  async _handlePermissionRequest(request2) {
+    if (!this.permissionHandler) {
+      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+    }
+    try {
+      const result = await this.permissionHandler(request2, {
+        sessionId: this.sessionId
+      });
+      return result;
+    } catch (_error) {
+      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+    }
+  }
+  /**
+   * Handles a user input request from the Copilot CLI.
+   *
+   * @param request - The user input request data from the CLI
+   * @returns A promise that resolves with the user's response
+   * @internal This method is for internal use by the SDK.
+   */
+  async _handleUserInputRequest(request2) {
+    if (!this.userInputHandler) {
+      throw new Error("User input requested but no handler registered");
+    }
+    try {
+      const result = await this.userInputHandler(request2, {
+        sessionId: this.sessionId
+      });
+      return result;
+    } catch (error2) {
+      throw error2;
+    }
+  }
+  /**
+   * Handles a hooks invocation from the Copilot CLI.
+   *
+   * @param hookType - The type of hook being invoked
+   * @param input - The input data for the hook
+   * @returns A promise that resolves with the hook output, or undefined
+   * @internal This method is for internal use by the SDK.
+   */
+  async _handleHooksInvoke(hookType, input) {
+    if (!this.hooks) {
+      return void 0;
+    }
+    const handlerMap = {
+      preToolUse: this.hooks.onPreToolUse,
+      postToolUse: this.hooks.onPostToolUse,
+      userPromptSubmitted: this.hooks.onUserPromptSubmitted,
+      sessionStart: this.hooks.onSessionStart,
+      sessionEnd: this.hooks.onSessionEnd,
+      errorOccurred: this.hooks.onErrorOccurred
+    };
+    const handler2 = handlerMap[hookType];
+    if (!handler2) {
+      return void 0;
+    }
+    try {
+      const result = await handler2(input, { sessionId: this.sessionId });
+      return result;
+    } catch (_error) {
+      return void 0;
+    }
+  }
+  /**
+   * Retrieves all events and messages from this session's history.
+   *
+   * This returns the complete conversation history including user messages,
+   * assistant responses, tool executions, and other session events.
+   *
+   * @returns A promise that resolves with an array of all session events
+   * @throws Error if the session has been destroyed or the connection fails
+   *
+   * @example
+   * ```typescript
+   * const events = await session.getMessages();
+   * for (const event of events) {
+   *   if (event.type === "assistant.message") {
+   *     console.log("Assistant:", event.data.content);
+   *   }
+   * }
+   * ```
+   */
+  async getMessages() {
+    const response = await this.connection.sendRequest("session.getMessages", {
+      sessionId: this.sessionId
+    });
+    return response.events;
+  }
+  /**
+   * Destroys this session and releases all associated resources.
+   *
+   * After calling this method, the session can no longer be used. All event
+   * handlers and tool handlers are cleared. To continue the conversation,
+   * use {@link CopilotClient.resumeSession} with the session ID.
+   *
+   * @returns A promise that resolves when the session is destroyed
+   * @throws Error if the connection fails
+   *
+   * @example
+   * ```typescript
+   * // Clean up when done
+   * await session.destroy();
+   * ```
+   */
+  async destroy() {
+    await this.connection.sendRequest("session.destroy", {
+      sessionId: this.sessionId
+    });
+    this.eventHandlers.clear();
+    this.typedEventHandlers.clear();
+    this.toolHandlers.clear();
+    this.permissionHandler = void 0;
+  }
+  /**
+   * Aborts the currently processing message in this session.
+   *
+   * Use this to cancel a long-running request. The session remains valid
+   * and can continue to be used for new messages.
+   *
+   * @returns A promise that resolves when the abort request is acknowledged
+   * @throws Error if the session has been destroyed or the connection fails
+   *
+   * @example
+   * ```typescript
+   * // Start a long-running request
+   * const messagePromise = session.send({ prompt: "Write a very long story..." });
+   *
+   * // Abort after 5 seconds
+   * setTimeout(async () => {
+   *   await session.abort();
+   * }, 5000);
+   * ```
+   */
+  async abort() {
+    await this.connection.sendRequest("session.abort", {
+      sessionId: this.sessionId
+    });
+  }
+};
+
+// node_modules/@github/copilot-sdk/dist/client.js
+function isZodSchema(value) {
+  return value != null && typeof value === "object" && "toJSONSchema" in value && typeof value.toJSONSchema === "function";
+}
+function toJsonSchema(parameters) {
+  if (!parameters) return void 0;
+  if (isZodSchema(parameters)) {
+    return parameters.toJSONSchema();
+  }
+  return parameters;
+}
+var CopilotClient = class {
+  cliProcess = null;
+  connection = null;
+  socket = null;
+  actualPort = null;
+  actualHost = "localhost";
+  state = "disconnected";
+  sessions = /* @__PURE__ */ new Map();
+  options;
+  isExternalServer = false;
+  forceStopping = false;
+  modelsCache = null;
+  modelsCacheLock = Promise.resolve();
+  sessionLifecycleHandlers = /* @__PURE__ */ new Set();
+  typedLifecycleHandlers = /* @__PURE__ */ new Map();
+  /**
+   * Creates a new CopilotClient instance.
+   *
+   * @param options - Configuration options for the client
+   * @throws Error if mutually exclusive options are provided (e.g., cliUrl with useStdio or cliPath)
+   *
+   * @example
+   * ```typescript
+   * // Default options - spawns CLI server using stdio
+   * const client = new CopilotClient();
+   *
+   * // Connect to an existing server
+   * const client = new CopilotClient({ cliUrl: "localhost:3000" });
+   *
+   * // Custom CLI path with specific log level
+   * const client = new CopilotClient({
+   *   cliPath: "/usr/local/bin/copilot",
+   *   logLevel: "debug"
+   * });
+   * ```
+   */
+  constructor(options = {}) {
+    if (options.cliUrl && (options.useStdio === true || options.cliPath)) {
+      throw new Error("cliUrl is mutually exclusive with useStdio and cliPath");
+    }
+    if (options.cliUrl && (options.githubToken || options.useLoggedInUser !== void 0)) {
+      throw new Error(
+        "githubToken and useLoggedInUser cannot be used with cliUrl (external server manages its own auth)"
+      );
+    }
+    if (options.cliUrl) {
+      const { host, port } = this.parseCliUrl(options.cliUrl);
+      this.actualHost = host;
+      this.actualPort = port;
+      this.isExternalServer = true;
+    }
+    this.options = {
+      cliPath: options.cliPath || "copilot",
+      cliArgs: options.cliArgs ?? [],
+      cwd: options.cwd ?? process.cwd(),
+      port: options.port || 0,
+      useStdio: options.cliUrl ? false : options.useStdio ?? true,
+      // Default to stdio unless cliUrl is provided
+      cliUrl: options.cliUrl,
+      logLevel: options.logLevel || "debug",
+      autoStart: options.autoStart ?? true,
+      autoRestart: options.autoRestart ?? true,
+      env: options.env ?? process.env,
+      githubToken: options.githubToken,
+      // Default useLoggedInUser to false when githubToken is provided, otherwise true
+      useLoggedInUser: options.useLoggedInUser ?? (options.githubToken ? false : true)
+    };
+  }
+  /**
+   * Parse CLI URL into host and port
+   * Supports formats: "host:port", "http://host:port", "https://host:port", or just "port"
+   */
+  parseCliUrl(url) {
+    let cleanUrl = url.replace(/^https?:\/\//, "");
+    if (/^\d+$/.test(cleanUrl)) {
+      return { host: "localhost", port: parseInt(cleanUrl, 10) };
+    }
+    const parts = cleanUrl.split(":");
+    if (parts.length !== 2) {
+      throw new Error(
+        `Invalid cliUrl format: ${url}. Expected "host:port", "http://host:port", or "port"`
+      );
+    }
+    const host = parts[0] || "localhost";
+    const port = parseInt(parts[1], 10);
+    if (isNaN(port) || port <= 0 || port > 65535) {
+      throw new Error(`Invalid port in cliUrl: ${url}`);
+    }
+    return { host, port };
+  }
+  /**
+   * Starts the CLI server and establishes a connection.
+   *
+   * If connecting to an external server (via cliUrl), only establishes the connection.
+   * Otherwise, spawns the CLI server process and then connects.
+   *
+   * This method is called automatically when creating a session if `autoStart` is true (default).
+   *
+   * @returns A promise that resolves when the connection is established
+   * @throws Error if the server fails to start or the connection fails
+   *
+   * @example
+   * ```typescript
+   * const client = new CopilotClient({ autoStart: false });
+   * await client.start();
+   * // Now ready to create sessions
+   * ```
+   */
+  async start() {
+    if (this.state === "connected") {
+      return;
+    }
+    this.state = "connecting";
+    try {
+      if (!this.isExternalServer) {
+        await this.startCLIServer();
+      }
+      await this.connectToServer();
+      await this.verifyProtocolVersion();
+      this.state = "connected";
+    } catch (error2) {
+      this.state = "error";
+      throw error2;
+    }
+  }
+  /**
+   * Stops the CLI server and closes all active sessions.
+   *
+   * This method performs graceful cleanup:
+   * 1. Destroys all active sessions with retry logic
+   * 2. Closes the JSON-RPC connection
+   * 3. Terminates the CLI server process (if spawned by this client)
+   *
+   * @returns A promise that resolves with an array of errors encountered during cleanup.
+   *          An empty array indicates all cleanup succeeded.
+   *
+   * @example
+   * ```typescript
+   * const errors = await client.stop();
+   * if (errors.length > 0) {
+   *   console.error("Cleanup errors:", errors);
+   * }
+   * ```
+   */
+  async stop() {
+    const errors = [];
+    for (const session of this.sessions.values()) {
+      const sessionId = session.sessionId;
+      let lastError = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await session.destroy();
+          lastError = null;
+          break;
+        } catch (error2) {
+          lastError = error2 instanceof Error ? error2 : new Error(String(error2));
+          if (attempt < 3) {
+            const delay = 100 * Math.pow(2, attempt - 1);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+      }
+      if (lastError) {
+        errors.push(
+          new Error(
+            `Failed to destroy session ${sessionId} after 3 attempts: ${lastError.message}`
+          )
+        );
+      }
+    }
+    this.sessions.clear();
+    if (this.connection) {
+      try {
+        this.connection.dispose();
+      } catch (error2) {
+        errors.push(
+          new Error(
+            `Failed to dispose connection: ${error2 instanceof Error ? error2.message : String(error2)}`
+          )
+        );
+      }
+      this.connection = null;
+    }
+    this.modelsCache = null;
+    if (this.socket) {
+      try {
+        this.socket.end();
+      } catch (error2) {
+        errors.push(
+          new Error(
+            `Failed to close socket: ${error2 instanceof Error ? error2.message : String(error2)}`
+          )
+        );
+      }
+      this.socket = null;
+    }
+    if (this.cliProcess && !this.isExternalServer) {
+      try {
+        this.cliProcess.kill();
+      } catch (error2) {
+        errors.push(
+          new Error(
+            `Failed to kill CLI process: ${error2 instanceof Error ? error2.message : String(error2)}`
+          )
+        );
+      }
+      this.cliProcess = null;
+    }
+    this.state = "disconnected";
+    this.actualPort = null;
+    return errors;
+  }
+  /**
+   * Forcefully stops the CLI server without graceful cleanup.
+   *
+   * Use this when {@link stop} fails or takes too long. This method:
+   * - Clears all sessions immediately without destroying them
+   * - Force closes the connection
+   * - Sends SIGKILL to the CLI process (if spawned by this client)
+   *
+   * @returns A promise that resolves when the force stop is complete
+   *
+   * @example
+   * ```typescript
+   * // If normal stop hangs, force stop
+   * const stopPromise = client.stop();
+   * const timeout = new Promise((_, reject) =>
+   *   setTimeout(() => reject(new Error("Timeout")), 5000)
+   * );
+   *
+   * try {
+   *   await Promise.race([stopPromise, timeout]);
+   * } catch {
+   *   await client.forceStop();
+   * }
+   * ```
+   */
+  async forceStop() {
+    this.forceStopping = true;
+    this.sessions.clear();
+    if (this.connection) {
+      try {
+        this.connection.dispose();
+      } catch {
+      }
+      this.connection = null;
+    }
+    this.modelsCache = null;
+    if (this.socket) {
+      try {
+        this.socket.destroy();
+      } catch {
+      }
+      this.socket = null;
+    }
+    if (this.cliProcess && !this.isExternalServer) {
+      try {
+        this.cliProcess.kill("SIGKILL");
+      } catch {
+      }
+      this.cliProcess = null;
+    }
+    this.state = "disconnected";
+    this.actualPort = null;
+  }
+  /**
+   * Creates a new conversation session with the Copilot CLI.
+   *
+   * Sessions maintain conversation state, handle events, and manage tool execution.
+   * If the client is not connected and `autoStart` is enabled, this will automatically
+   * start the connection.
+   *
+   * @param config - Optional configuration for the session
+   * @returns A promise that resolves with the created session
+   * @throws Error if the client is not connected and autoStart is disabled
+   *
+   * @example
+   * ```typescript
+   * // Basic session
+   * const session = await client.createSession();
+   *
+   * // Session with model and tools
+   * const session = await client.createSession({
+   *   model: "gpt-4",
+   *   tools: [{
+   *     name: "get_weather",
+   *     description: "Get weather for a location",
+   *     parameters: { type: "object", properties: { location: { type: "string" } } },
+   *     handler: async (args) => ({ temperature: 72 })
+   *   }]
+   * });
+   * ```
+   */
+  async createSession(config = {}) {
+    if (!this.connection) {
+      if (this.options.autoStart) {
+        await this.start();
+      } else {
+        throw new Error("Client not connected. Call start() first.");
+      }
+    }
+    const response = await this.connection.sendRequest("session.create", {
+      model: config.model,
+      sessionId: config.sessionId,
+      reasoningEffort: config.reasoningEffort,
+      tools: config.tools?.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: toJsonSchema(tool.parameters)
+      })),
+      systemMessage: config.systemMessage,
+      availableTools: config.availableTools,
+      excludedTools: config.excludedTools,
+      provider: config.provider,
+      requestPermission: !!config.onPermissionRequest,
+      requestUserInput: !!config.onUserInputRequest,
+      hooks: !!(config.hooks && Object.values(config.hooks).some(Boolean)),
+      workingDirectory: config.workingDirectory,
+      streaming: config.streaming,
+      mcpServers: config.mcpServers,
+      customAgents: config.customAgents,
+      configDir: config.configDir,
+      skillDirectories: config.skillDirectories,
+      disabledSkills: config.disabledSkills,
+      infiniteSessions: config.infiniteSessions
+    });
+    const { sessionId, workspacePath } = response;
+    const session = new CopilotSession(sessionId, this.connection, workspacePath);
+    session.registerTools(config.tools);
+    if (config.onPermissionRequest) {
+      session.registerPermissionHandler(config.onPermissionRequest);
+    }
+    if (config.onUserInputRequest) {
+      session.registerUserInputHandler(config.onUserInputRequest);
+    }
+    if (config.hooks) {
+      session.registerHooks(config.hooks);
+    }
+    this.sessions.set(sessionId, session);
+    return session;
+  }
+  /**
+   * Resumes an existing conversation session by its ID.
+   *
+   * This allows you to continue a previous conversation, maintaining all
+   * conversation history. The session must have been previously created
+   * and not deleted.
+   *
+   * @param sessionId - The ID of the session to resume
+   * @param config - Optional configuration for the resumed session
+   * @returns A promise that resolves with the resumed session
+   * @throws Error if the session does not exist or the client is not connected
+   *
+   * @example
+   * ```typescript
+   * // Resume a previous session
+   * const session = await client.resumeSession("session-123");
+   *
+   * // Resume with new tools
+   * const session = await client.resumeSession("session-123", {
+   *   tools: [myNewTool]
+   * });
+   * ```
+   */
+  async resumeSession(sessionId, config = {}) {
+    if (!this.connection) {
+      if (this.options.autoStart) {
+        await this.start();
+      } else {
+        throw new Error("Client not connected. Call start() first.");
+      }
+    }
+    const response = await this.connection.sendRequest("session.resume", {
+      sessionId,
+      reasoningEffort: config.reasoningEffort,
+      tools: config.tools?.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: toJsonSchema(tool.parameters)
+      })),
+      provider: config.provider,
+      requestPermission: !!config.onPermissionRequest,
+      requestUserInput: !!config.onUserInputRequest,
+      hooks: !!(config.hooks && Object.values(config.hooks).some(Boolean)),
+      workingDirectory: config.workingDirectory,
+      streaming: config.streaming,
+      mcpServers: config.mcpServers,
+      customAgents: config.customAgents,
+      skillDirectories: config.skillDirectories,
+      disabledSkills: config.disabledSkills,
+      disableResume: config.disableResume
+    });
+    const { sessionId: resumedSessionId, workspacePath } = response;
+    const session = new CopilotSession(resumedSessionId, this.connection, workspacePath);
+    session.registerTools(config.tools);
+    if (config.onPermissionRequest) {
+      session.registerPermissionHandler(config.onPermissionRequest);
+    }
+    if (config.onUserInputRequest) {
+      session.registerUserInputHandler(config.onUserInputRequest);
+    }
+    if (config.hooks) {
+      session.registerHooks(config.hooks);
+    }
+    this.sessions.set(resumedSessionId, session);
+    return session;
+  }
+  /**
+   * Gets the current connection state of the client.
+   *
+   * @returns The current connection state: "disconnected", "connecting", "connected", or "error"
+   *
+   * @example
+   * ```typescript
+   * if (client.getState() === "connected") {
+   *   const session = await client.createSession();
+   * }
+   * ```
+   */
+  getState() {
+    return this.state;
+  }
+  /**
+   * Sends a ping request to the server to verify connectivity.
+   *
+   * @param message - Optional message to include in the ping
+   * @returns A promise that resolves with the ping response containing the message and timestamp
+   * @throws Error if the client is not connected
+   *
+   * @example
+   * ```typescript
+   * const response = await client.ping("health check");
+   * console.log(`Server responded at ${new Date(response.timestamp)}`);
+   * ```
+   */
+  async ping(message) {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const result = await this.connection.sendRequest("ping", { message });
+    return result;
+  }
+  /**
+   * Get CLI status including version and protocol information
+   */
+  async getStatus() {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const result = await this.connection.sendRequest("status.get", {});
+    return result;
+  }
+  /**
+   * Get current authentication status
+   */
+  async getAuthStatus() {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const result = await this.connection.sendRequest("auth.getStatus", {});
+    return result;
+  }
+  /**
+   * List available models with their metadata.
+   *
+   * Results are cached after the first successful call to avoid rate limiting.
+   * The cache is cleared when the client disconnects.
+   *
+   * @throws Error if not authenticated
+   */
+  async listModels() {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    await this.modelsCacheLock;
+    let resolveLock;
+    this.modelsCacheLock = new Promise((resolve) => {
+      resolveLock = resolve;
+    });
+    try {
+      if (this.modelsCache !== null) {
+        return [...this.modelsCache];
+      }
+      const result = await this.connection.sendRequest("models.list", {});
+      const response = result;
+      const models = response.models;
+      this.modelsCache = models;
+      return [...models];
+    } finally {
+      resolveLock();
+    }
+  }
+  /**
+   * Verify that the server's protocol version matches the SDK's expected version
+   */
+  async verifyProtocolVersion() {
+    const expectedVersion = getSdkProtocolVersion();
+    const pingResult = await this.ping();
+    const serverVersion = pingResult.protocolVersion;
+    if (serverVersion === void 0) {
+      throw new Error(
+        `SDK protocol version mismatch: SDK expects version ${expectedVersion}, but server does not report a protocol version. Please update your server to ensure compatibility.`
+      );
+    }
+    if (serverVersion !== expectedVersion) {
+      throw new Error(
+        `SDK protocol version mismatch: SDK expects version ${expectedVersion}, but server reports version ${serverVersion}. Please update your SDK or server to ensure compatibility.`
+      );
+    }
+  }
+  /**
+   * Gets the ID of the most recently updated session.
+   *
+   * This is useful for resuming the last conversation when the session ID
+   * was not stored.
+   *
+   * @returns A promise that resolves with the session ID, or undefined if no sessions exist
+   * @throws Error if the client is not connected
+   *
+   * @example
+   * ```typescript
+   * const lastId = await client.getLastSessionId();
+   * if (lastId) {
+   *   const session = await client.resumeSession(lastId);
+   * }
+   * ```
+   */
+  async getLastSessionId() {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const response = await this.connection.sendRequest("session.getLastId", {});
+    return response.sessionId;
+  }
+  /**
+   * Deletes a session and its data from disk.
+   *
+   * This permanently removes the session and all its conversation history.
+   * The session cannot be resumed after deletion.
+   *
+   * @param sessionId - The ID of the session to delete
+   * @returns A promise that resolves when the session is deleted
+   * @throws Error if the session does not exist or deletion fails
+   *
+   * @example
+   * ```typescript
+   * await client.deleteSession("session-123");
+   * ```
+   */
+  async deleteSession(sessionId) {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const response = await this.connection.sendRequest("session.delete", {
+      sessionId
+    });
+    const { success, error: error2 } = response;
+    if (!success) {
+      throw new Error(`Failed to delete session ${sessionId}: ${error2 || "Unknown error"}`);
+    }
+    this.sessions.delete(sessionId);
+  }
+  /**
+   * Lists all available sessions known to the server.
+   *
+   * Returns metadata about each session including ID, timestamps, and summary.
+   *
+   * @returns A promise that resolves with an array of session metadata
+   * @throws Error if the client is not connected
+   *
+   * @example
+   * ```typescript
+   * const sessions = await client.listSessions();
+   * for (const session of sessions) {
+   *   console.log(`${session.sessionId}: ${session.summary}`);
+   * }
+   * ```
+   */
+  async listSessions() {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const response = await this.connection.sendRequest("session.list", {});
+    const { sessions } = response;
+    return sessions.map((s) => ({
+      sessionId: s.sessionId,
+      startTime: new Date(s.startTime),
+      modifiedTime: new Date(s.modifiedTime),
+      summary: s.summary,
+      isRemote: s.isRemote
+    }));
+  }
+  /**
+   * Gets the foreground session ID in TUI+server mode.
+   *
+   * This returns the ID of the session currently displayed in the TUI.
+   * Only available when connecting to a server running in TUI+server mode (--ui-server).
+   *
+   * @returns A promise that resolves with the foreground session ID, or undefined if none
+   * @throws Error if the client is not connected
+   *
+   * @example
+   * ```typescript
+   * const sessionId = await client.getForegroundSessionId();
+   * if (sessionId) {
+   *   console.log(`TUI is displaying session: ${sessionId}`);
+   * }
+   * ```
+   */
+  async getForegroundSessionId() {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const response = await this.connection.sendRequest("session.getForeground", {});
+    return response.sessionId;
+  }
+  /**
+   * Sets the foreground session in TUI+server mode.
+   *
+   * This requests the TUI to switch to displaying the specified session.
+   * Only available when connecting to a server running in TUI+server mode (--ui-server).
+   *
+   * @param sessionId - The ID of the session to display in the TUI
+   * @returns A promise that resolves when the session is switched
+   * @throws Error if the client is not connected or if the operation fails
+   *
+   * @example
+   * ```typescript
+   * // Switch the TUI to display a specific session
+   * await client.setForegroundSessionId("session-123");
+   * ```
+   */
+  async setForegroundSessionId(sessionId) {
+    if (!this.connection) {
+      throw new Error("Client not connected");
+    }
+    const response = await this.connection.sendRequest("session.setForeground", { sessionId });
+    const result = response;
+    if (!result.success) {
+      throw new Error(result.error || "Failed to set foreground session");
+    }
+  }
+  on(eventTypeOrHandler, handler2) {
+    if (typeof eventTypeOrHandler === "string" && handler2) {
+      const eventType = eventTypeOrHandler;
+      if (!this.typedLifecycleHandlers.has(eventType)) {
+        this.typedLifecycleHandlers.set(eventType, /* @__PURE__ */ new Set());
+      }
+      const storedHandler = handler2;
+      this.typedLifecycleHandlers.get(eventType).add(storedHandler);
+      return () => {
+        const handlers = this.typedLifecycleHandlers.get(eventType);
+        if (handlers) {
+          handlers.delete(storedHandler);
+        }
+      };
+    }
+    const wildcardHandler = eventTypeOrHandler;
+    this.sessionLifecycleHandlers.add(wildcardHandler);
+    return () => {
+      this.sessionLifecycleHandlers.delete(wildcardHandler);
+    };
+  }
+  /**
+   * Start the CLI server process
+   */
+  async startCLIServer() {
+    return new Promise((resolve, reject) => {
+      const args = [
+        ...this.options.cliArgs,
+        "--headless",
+        "--log-level",
+        this.options.logLevel
+      ];
+      if (this.options.useStdio) {
+        args.push("--stdio");
+      } else if (this.options.port > 0) {
+        args.push("--port", this.options.port.toString());
+      }
+      if (this.options.githubToken) {
+        args.push("--auth-token-env", "COPILOT_SDK_AUTH_TOKEN");
+      }
+      if (!this.options.useLoggedInUser) {
+        args.push("--no-auto-login");
+      }
+      const envWithoutNodeDebug = { ...this.options.env };
+      delete envWithoutNodeDebug.NODE_DEBUG;
+      if (this.options.githubToken) {
+        envWithoutNodeDebug.COPILOT_SDK_AUTH_TOKEN = this.options.githubToken;
+      }
+      const isJsFile = this.options.cliPath.endsWith(".js");
+      const isAbsolutePath = this.options.cliPath.startsWith("/") || /^[a-zA-Z]:/.test(this.options.cliPath);
+      let command;
+      let spawnArgs;
+      if (isJsFile) {
+        command = "node";
+        spawnArgs = [this.options.cliPath, ...args];
+      } else if (process.platform === "win32" && !isAbsolutePath) {
+        command = "cmd";
+        spawnArgs = ["/c", `${this.options.cliPath}`, ...args];
+      } else {
+        command = this.options.cliPath;
+        spawnArgs = args;
+      }
+      this.cliProcess = spawn(command, spawnArgs, {
+        stdio: this.options.useStdio ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
+        cwd: this.options.cwd,
+        env: envWithoutNodeDebug
+      });
+      let stdout = "";
+      let resolved = false;
+      if (this.options.useStdio) {
+        resolved = true;
+        resolve();
+      } else {
+        this.cliProcess.stdout?.on("data", (data) => {
+          stdout += data.toString();
+          const match = stdout.match(/listening on port (\d+)/i);
+          if (match && !resolved) {
+            this.actualPort = parseInt(match[1], 10);
+            resolved = true;
+            resolve();
+          }
+        });
+      }
+      this.cliProcess.stderr?.on("data", (data) => {
+        const lines = data.toString().split("\n");
+        for (const line of lines) {
+          if (line.trim()) {
+            process.stderr.write(`[CLI subprocess] ${line}
+`);
+          }
+        }
+      });
+      this.cliProcess.on("error", (error2) => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`Failed to start CLI server: ${error2.message}`));
+        }
+      });
+      this.cliProcess.on("exit", (code) => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`CLI server exited with code ${code}`));
+        } else if (this.options.autoRestart && this.state === "connected") {
+          void this.reconnect();
+        }
+      });
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error("Timeout waiting for CLI server to start"));
+        }
+      }, 1e4);
+    });
+  }
+  /**
+   * Connect to the CLI server (via socket or stdio)
+   */
+  async connectToServer() {
+    if (this.options.useStdio) {
+      return this.connectViaStdio();
+    } else {
+      return this.connectViaTcp();
+    }
+  }
+  /**
+   * Connect via stdio pipes
+   */
+  async connectViaStdio() {
+    if (!this.cliProcess) {
+      throw new Error("CLI process not started");
+    }
+    this.cliProcess.stdin?.on("error", (err) => {
+      if (!this.forceStopping) {
+        throw err;
+      }
+    });
+    this.connection = (0, import_node.createMessageConnection)(
+      new import_node.StreamMessageReader(this.cliProcess.stdout),
+      new import_node.StreamMessageWriter(this.cliProcess.stdin)
+    );
+    this.attachConnectionHandlers();
+    this.connection.listen();
+  }
+  /**
+   * Connect to the CLI server via TCP socket
+   */
+  async connectViaTcp() {
+    if (!this.actualPort) {
+      throw new Error("Server port not available");
+    }
+    return new Promise((resolve, reject) => {
+      this.socket = new Socket();
+      this.socket.connect(this.actualPort, this.actualHost, () => {
+        this.connection = (0, import_node.createMessageConnection)(
+          new import_node.StreamMessageReader(this.socket),
+          new import_node.StreamMessageWriter(this.socket)
+        );
+        this.attachConnectionHandlers();
+        this.connection.listen();
+        resolve();
+      });
+      this.socket.on("error", (error2) => {
+        reject(new Error(`Failed to connect to CLI server: ${error2.message}`));
+      });
+    });
+  }
+  attachConnectionHandlers() {
+    if (!this.connection) {
+      return;
+    }
+    this.connection.onNotification("session.event", (notification) => {
+      this.handleSessionEventNotification(notification);
+    });
+    this.connection.onNotification("session.lifecycle", (notification) => {
+      this.handleSessionLifecycleNotification(notification);
+    });
+    this.connection.onRequest(
+      "tool.call",
+      async (params) => await this.handleToolCallRequest(params)
+    );
+    this.connection.onRequest(
+      "permission.request",
+      async (params) => await this.handlePermissionRequest(params)
+    );
+    this.connection.onRequest(
+      "userInput.request",
+      async (params) => await this.handleUserInputRequest(params)
+    );
+    this.connection.onRequest(
+      "hooks.invoke",
+      async (params) => await this.handleHooksInvoke(params)
+    );
+    this.connection.onClose(() => {
+      if (this.state === "connected" && this.options.autoRestart) {
+        void this.reconnect();
+      }
+    });
+    this.connection.onError((_error) => {
+    });
+  }
+  handleSessionEventNotification(notification) {
+    if (typeof notification !== "object" || !notification || !("sessionId" in notification) || typeof notification.sessionId !== "string" || !("event" in notification)) {
+      return;
+    }
+    const session = this.sessions.get(notification.sessionId);
+    if (session) {
+      session._dispatchEvent(notification.event);
+    }
+  }
+  handleSessionLifecycleNotification(notification) {
+    if (typeof notification !== "object" || !notification || !("type" in notification) || typeof notification.type !== "string" || !("sessionId" in notification) || typeof notification.sessionId !== "string") {
+      return;
+    }
+    const event = notification;
+    const typedHandlers = this.typedLifecycleHandlers.get(event.type);
+    if (typedHandlers) {
+      for (const handler2 of typedHandlers) {
+        try {
+          handler2(event);
+        } catch {
+        }
+      }
+    }
+    for (const handler2 of this.sessionLifecycleHandlers) {
+      try {
+        handler2(event);
+      } catch {
+      }
+    }
+  }
+  async handleToolCallRequest(params) {
+    if (!params || typeof params.sessionId !== "string" || typeof params.toolCallId !== "string" || typeof params.toolName !== "string") {
+      throw new Error("Invalid tool call payload");
+    }
+    const session = this.sessions.get(params.sessionId);
+    if (!session) {
+      throw new Error(`Unknown session ${params.sessionId}`);
+    }
+    const handler2 = session.getToolHandler(params.toolName);
+    if (!handler2) {
+      return { result: this.buildUnsupportedToolResult(params.toolName) };
+    }
+    return await this.executeToolCall(handler2, params);
+  }
+  async executeToolCall(handler2, request2) {
+    try {
+      const invocation = {
+        sessionId: request2.sessionId,
+        toolCallId: request2.toolCallId,
+        toolName: request2.toolName,
+        arguments: request2.arguments
+      };
+      const result = await handler2(request2.arguments, invocation);
+      return { result: this.normalizeToolResult(result) };
+    } catch (error2) {
+      const message = error2 instanceof Error ? error2.message : String(error2);
+      return {
+        result: {
+          // Don't expose detailed error information to the LLM for security reasons
+          textResultForLlm: "Invoking this tool produced an error. Detailed information is not available.",
+          resultType: "failure",
+          error: message,
+          toolTelemetry: {}
+        }
+      };
+    }
+  }
+  async handlePermissionRequest(params) {
+    if (!params || typeof params.sessionId !== "string" || !params.permissionRequest) {
+      throw new Error("Invalid permission request payload");
+    }
+    const session = this.sessions.get(params.sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${params.sessionId}`);
+    }
+    try {
+      const result = await session._handlePermissionRequest(params.permissionRequest);
+      return { result };
+    } catch (_error) {
+      return {
+        result: {
+          kind: "denied-no-approval-rule-and-could-not-request-from-user"
+        }
+      };
+    }
+  }
+  async handleUserInputRequest(params) {
+    if (!params || typeof params.sessionId !== "string" || typeof params.question !== "string") {
+      throw new Error("Invalid user input request payload");
+    }
+    const session = this.sessions.get(params.sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${params.sessionId}`);
+    }
+    const result = await session._handleUserInputRequest({
+      question: params.question,
+      choices: params.choices,
+      allowFreeform: params.allowFreeform
+    });
+    return result;
+  }
+  async handleHooksInvoke(params) {
+    if (!params || typeof params.sessionId !== "string" || typeof params.hookType !== "string") {
+      throw new Error("Invalid hooks invoke payload");
+    }
+    const session = this.sessions.get(params.sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${params.sessionId}`);
+    }
+    const output = await session._handleHooksInvoke(params.hookType, params.input);
+    return { output };
+  }
+  normalizeToolResult(result) {
+    if (result === void 0 || result === null) {
+      return {
+        textResultForLlm: "Tool returned no result",
+        resultType: "failure",
+        error: "tool returned no result",
+        toolTelemetry: {}
+      };
+    }
+    if (this.isToolResultObject(result)) {
+      return result;
+    }
+    const textResult = typeof result === "string" ? result : JSON.stringify(result);
+    return {
+      textResultForLlm: textResult,
+      resultType: "success",
+      toolTelemetry: {}
+    };
+  }
+  isToolResultObject(value) {
+    return typeof value === "object" && value !== null && "textResultForLlm" in value && typeof value.textResultForLlm === "string" && "resultType" in value;
+  }
+  buildUnsupportedToolResult(toolName) {
+    return {
+      textResultForLlm: `Tool '${toolName}' is not supported by this client instance.`,
+      resultType: "failure",
+      error: `tool '${toolName}' not supported`,
+      toolTelemetry: {}
+    };
+  }
+  /**
+   * Attempt to reconnect to the server
+   */
+  async reconnect() {
+    this.state = "disconnected";
+    try {
+      await this.stop();
+      await this.start();
+    } catch (_error) {
+    }
+  }
+};
 
 // dist/sdk/copilot-client.js
 var core = __toESM(require_core(), 1);
+var copilotClientInstance = null;
+function hasCopilotAuth() {
+  const copilotToken = process.env.COPILOT_GITHUB_TOKEN;
+  const ghToken = process.env.GH_TOKEN;
+  const githubToken = process.env.GITHUB_TOKEN;
+  if (copilotToken && copilotToken.length > 0) {
+    return true;
+  }
+  if (ghToken && ghToken.length > 0) {
+    return true;
+  }
+  if (githubToken && githubToken.length > 0) {
+    if (githubToken.startsWith("github_pat_") || githubToken.startsWith("gho_") || githubToken.startsWith("ghu_")) {
+      return true;
+    }
+    core.debug("GITHUB_TOKEN appears to be an Actions token without Copilot access");
+  }
+  return false;
+}
+async function isCopilotAvailable() {
+  if (!hasCopilotAuth()) {
+    core.warning("No valid Copilot authentication found. Set COPILOT_GITHUB_TOKEN with a fine-grained PAT that has Copilot access.");
+    return false;
+  }
+  return true;
+}
+async function getCopilotClient() {
+  if (!copilotClientInstance) {
+    const available = await isCopilotAvailable();
+    if (!available) {
+      throw new Error("Copilot CLI not available in this environment. AI-powered insights will use fallback.");
+    }
+    copilotClientInstance = new CopilotClient();
+    await copilotClientInstance.start();
+    core.info("Copilot SDK client initialized");
+  }
+  return copilotClientInstance;
+}
+async function sendPrompt(systemPrompt, userPrompt, options = {}) {
+  const client = await getCopilotClient();
+  const model = options.model || "claude-sonnet-4.5";
+  core.info(`Sending prompt to Copilot SDK (model: ${model})...`);
+  try {
+    const session = await client.createSession({
+      model,
+      systemMessage: {
+        mode: "replace",
+        content: systemPrompt
+      }
+    });
+    const timeoutMs = process.env.GITHUB_ACTIONS ? 36e5 : 3e5;
+    const response = await session.sendAndWait({
+      prompt: userPrompt
+    }, timeoutMs);
+    const content = response?.data?.content || "";
+    const finishReason = response ? "stop" : "error";
+    core.info(`Copilot SDK response received (finish_reason: ${finishReason})`);
+    await session.destroy();
+    return {
+      content,
+      finishReason
+    };
+  } catch (error2) {
+    core.error(`Copilot SDK error: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    return {
+      content: "",
+      finishReason: "error"
+    };
+  }
+}
+function parseAgentResponse(response) {
+  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch?.[1]) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+    }
+  }
+  const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+  if (jsonObjectMatch) {
+    try {
+      return JSON.parse(jsonObjectMatch[0]);
+    } catch {
+    }
+  }
+  try {
+    return JSON.parse(response.trim());
+  } catch {
+    return null;
+  }
+}
 
 // dist/sdk/github-app.js
 var core2 = __toESM(require_core(), 1);
@@ -30985,6 +32488,11 @@ async function run() {
     const repo = github.context.repo.repo;
     core3.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, owner, repo);
+    if (config.mode === "issue-focused" && config.issueNumber) {
+      core3.info(`Running issue-focused research for issue #${config.issueNumber}...`);
+      await runIssueFocusedResearch(octokit, owner, repo, config, repoContext);
+      return;
+    }
     core3.info("Analyzing repository health...");
     const report = await analyzeRepository(octokit, owner, repo, config, repoContext);
     core3.setOutput("report", JSON.stringify(report));
@@ -31031,13 +32539,18 @@ function getConfig() {
   const focusAreas = focusAreasInput ? focusAreasInput.split(",").map((s) => s.trim()) : ["dependencies", "security", "technical-debt", "industry-research"];
   const minPriority = core3.getInput("min-priority-for-issue") || "high";
   const validPriorities = ["low", "medium", "high", "critical"];
+  const issueNumberInput = core3.getInput("issue-number");
+  const issueNumber = issueNumberInput ? parseInt(issueNumberInput, 10) : void 0;
+  const mode = core3.getInput("mode") || "scheduled";
   return {
     githubToken: core3.getInput("github-token", { required: true }),
     model: core3.getInput("model") || "claude-sonnet-4.5",
     outputType: core3.getInput("output-type") || "issue",
     focusAreas,
     createActionableIssues: core3.getInput("create-actionable-issues") === "true",
-    minPriorityForIssue: validPriorities.includes(minPriority) ? minPriority : "high"
+    minPriorityForIssue: validPriorities.includes(minPriority) ? minPriority : "high",
+    issueNumber: issueNumber && !isNaN(issueNumber) ? issueNumber : void 0,
+    mode
   };
 }
 async function analyzeRepository(octokit, owner, repo, config, repoContext) {
@@ -31687,6 +33200,160 @@ function getLabelColor(label) {
     integration: "c5def5"
   };
   return colorMap[label] || "ededed";
+}
+async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext) {
+  const issueNumber = config.issueNumber;
+  const ref = { owner, repo, issueNumber };
+  const { data: issue } = await octokit.rest.issues.get({
+    owner,
+    repo,
+    issue_number: issueNumber
+  });
+  core3.info(`Researching issue #${issueNumber}: ${issue.title}`);
+  const findings = await analyzeIssueContext(octokit, owner, repo, issue.title, issue.body || "", repoContext, config);
+  const comment = buildIssueResearchComment(findings, issue.title);
+  await createComment(octokit, ref, comment);
+  core3.info(`Posted research findings on issue #${issueNumber}`);
+  try {
+    await octokit.rest.issues.removeLabel({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      name: "ready-for-research"
+    });
+  } catch {
+  }
+  core3.setOutput("recommended-action", "assign-to-agent");
+  core3.setOutput("issue-number", String(issueNumber));
+  const auditEntry = createAuditEntry("research-agent", `issue-focused:${issueNumber}`, [], [
+    `mode:issue-focused`,
+    `issue:${issueNumber}`,
+    `findings:${findings.keyFindings.length}`,
+    `recommendations:${findings.recommendations.length}`
+  ], DEFAULT_MODEL);
+  await logAgentDecision(octokit, ref, auditEntry);
+  core3.info(`Issue-focused research complete for #${issueNumber}`);
+}
+async function analyzeIssueContext(octokit, owner, repo, issueTitle, issueBody, repoContext, config) {
+  const contextSection = formatContextForPrompt(repoContext);
+  const similarRepos = await searchRelatedRepositories(octokit, issueTitle);
+  if (hasCopilotAuth()) {
+    try {
+      const prompt = `You are a research analyst investigating a GitHub issue before implementation.
+
+## Project Context
+${contextSection}
+
+## Issue to Research
+**Title:** ${issueTitle}
+
+**Description:**
+${issueBody}
+
+## Similar Projects Found
+${similarRepos.length > 0 ? similarRepos.map((r) => `- ${r.fullName} (${r.stars} stars): ${r.description}`).join("\n") : "None found"}
+
+## Task
+Analyze this issue and provide research findings to help the coding agent implement it effectively.
+
+CRITICAL: Respond with ONLY a JSON object. No explanatory text.
+
+{
+  "issueAnalysis": "Brief analysis of what this issue is asking for and why",
+  "keyFindings": ["Finding 1", "Finding 2"],
+  "recommendations": ["Recommendation for implementation approach"],
+  "similarApproaches": ["How similar projects handle this"],
+  "risks": ["Potential risks or gotchas to watch for"]
+}`;
+      const response = await sendPrompt("You are a technical research analyst. Output ONLY valid JSON.", prompt, { model: config.model });
+      if (response.content) {
+        const parsed = parseAgentResponse(response.content);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    } catch (error2) {
+      core3.warning(`AI analysis failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+  }
+  return {
+    issueAnalysis: `Issue "${issueTitle}" requires implementation analysis.`,
+    keyFindings: [
+      `Issue involves: ${issueTitle}`,
+      ...similarRepos.length > 0 ? [`Similar projects found: ${similarRepos.map((r) => r.fullName).join(", ")}`] : []
+    ],
+    recommendations: [
+      "Review existing codebase patterns before implementing",
+      "Consider writing tests alongside the implementation"
+    ],
+    similarApproaches: similarRepos.map((r) => `${r.fullName}: ${r.description}`),
+    risks: ["Verify compatibility with existing code before merging"]
+  };
+}
+async function searchRelatedRepositories(octokit, issueTitle) {
+  try {
+    const keywords = issueTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 3 && !["that", "this", "with", "from", "should", "would", "could"].includes(w)).slice(0, 3).join(" ");
+    if (!keywords)
+      return [];
+    const response = await octokit.rest.search.repos({
+      q: `${keywords} stars:>50`,
+      sort: "stars",
+      order: "desc",
+      per_page: 5
+    });
+    return response.data.items.map((r) => ({
+      fullName: r.full_name,
+      stars: r.stargazers_count,
+      description: r.description || ""
+    }));
+  } catch {
+    return [];
+  }
+}
+function buildIssueResearchComment(findings, issueTitle) {
+  const sections = [];
+  sections.push(`## \u{1F50D} AI Research Agent Findings
+`);
+  sections.push(`*Research analysis for: "${issueTitle}"*
+`);
+  sections.push(`### Analysis
+${findings.issueAnalysis}
+`);
+  if (findings.keyFindings.length > 0) {
+    sections.push(`### Key Findings
+`);
+    for (const finding of findings.keyFindings) {
+      sections.push(`- ${finding}`);
+    }
+    sections.push("");
+  }
+  if (findings.similarApproaches.length > 0) {
+    sections.push(`### Similar Approaches
+`);
+    for (const approach of findings.similarApproaches) {
+      sections.push(`- ${approach}`);
+    }
+    sections.push("");
+  }
+  if (findings.recommendations.length > 0) {
+    sections.push(`### Recommendations
+`);
+    for (const rec of findings.recommendations) {
+      sections.push(`- ${rec}`);
+    }
+    sections.push("");
+  }
+  if (findings.risks.length > 0) {
+    sections.push(`### Risks & Considerations
+`);
+    for (const risk of findings.risks) {
+      sections.push(`- \u26A0\uFE0F ${risk}`);
+    }
+    sections.push("");
+  }
+  sections.push(`---
+*The coding agent will use these findings during implementation.*`);
+  return sections.join("\n");
 }
 run();
 export {

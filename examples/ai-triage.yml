@@ -99,3 +99,25 @@ jobs:
               ref: repo.default_branch,
               inputs: { issue_number: String(issueNumber) }
             });
+
+      - name: Trigger Research Agent
+        if: steps.triage.outputs.recommended-action == 'route-to-research'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const issueNumber = context.payload.issue?.number || '${{ github.event.inputs.issue_number }}';
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ai-research.yml',
+              ref: repo.default_branch,
+              inputs: {
+                issue_number: String(issueNumber),
+                mode: 'issue-focused'
+              }
+            });

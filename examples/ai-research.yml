@@ -1,5 +1,5 @@
 # AI Research Workflow
-# Weekly codebase health monitoring and reporting
+# Weekly codebase health monitoring and issue-focused research
 #
 # SECURITY: Always pin to a specific commit SHA, not a branch or tag.
 # Update the SHA using Dependabot or manually after reviewing changes.
@@ -10,6 +10,7 @@
 # REQUIRED PERMISSIONS:
 # - issues: write        - Create and update research report issues
 # - contents: read       - Read repository files (README, VISION.md, etc.)
+# - actions: write       - Dispatch coding workflow (issue-focused mode)
 # - security-events: read - Read Dependabot security alerts (optional)
 
 name: AI Research Report
@@ -17,7 +18,25 @@ on:
   schedule:
     # Run every Monday at 9am UTC
     - cron: '0 9 * * 1'
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to research (for issue-focused mode)'
+        required: false
+        type: string
+      mode:
+        description: 'Research mode: scheduled or issue-focused'
+        required: false
+        default: 'scheduled'
+        type: choice
+        options:
+          - scheduled
+          - issue-focused
+
+# Prevent duplicate runs for the same issue
+concurrency:
+  group: ai-research-${{ github.event.inputs.issue_number || 'scheduled' }}
+  cancel-in-progress: true
 
 jobs:
   research:
@@ -25,16 +44,31 @@ jobs:
     permissions:
       issues: write          # Required: Create/update issues
       contents: read         # Required: Read repo content for context
+      actions: write         # Required: Dispatch coding workflow (issue-focused mode)
       security-events: read  # Optional: Read Dependabot alerts
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub Copilot CLI
+        run: |
+          npm install -g @github/copilot
+          echo "GitHub Copilot CLI installed at: $(which copilot || echo 'not in path')"
+          copilot --version || echo "CLI installed"
+
       - name: AI Research
+        id: research
         # TODO: Replace with actual commit SHA after first release
         # Example: uses: brendankowitz/gh-workflow-agents/actions/research-agent@a1b2c3d4e5f6...
         uses: brendankowitz/gh-workflow-agents/actions/research-agent@main
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
@@ -44,3 +78,25 @@ jobs:
           # Autonomous issue creation settings:
           create-actionable-issues: 'true'   # Create individual issues directly
           min-priority-for-issue: 'medium'   # Create for medium/high/critical priority
+          # Issue-focused mode inputs (passed from triage workflow dispatch):
+          issue-number: ${{ github.event.inputs.issue_number || '' }}
+          mode: ${{ github.event.inputs.mode || 'scheduled' }}
+
+      - name: Trigger Coding Agent
+        if: steps.research.outputs.recommended-action == 'assign-to-agent' && github.event.inputs.mode == 'issue-focused'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const issueNumber = '${{ steps.research.outputs.issue-number }}' || '${{ github.event.inputs.issue_number }}';
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ai-coding.yml',
+              ref: repo.default_branch,
+              inputs: { issue_number: String(issueNumber) }
+            });

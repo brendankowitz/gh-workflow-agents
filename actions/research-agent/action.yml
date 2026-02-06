@@ -53,6 +53,13 @@ inputs:
     description: 'Minimum priority level for creating individual issues (low, medium, high, critical)'
     required: false
     default: 'high'
+  issue-number:
+    description: 'Issue number to research (for issue-focused mode, triggered by triage agent)'
+    required: false
+  mode:
+    description: 'Research mode: scheduled (default weekly report) or issue-focused (targeted analysis for a specific issue)'
+    required: false
+    default: 'scheduled'
 
 outputs:
   report:
@@ -67,6 +74,10 @@ outputs:
     description: 'Number of actionable issues created'
   issue-numbers:
     description: 'Comma-separated list of created issue numbers'
+  recommended-action:
+    description: 'Next action recommendation (e.g., assign-to-agent for issue-focused mode)'
+  issue-number:
+    description: 'Issue number that was researched (for chaining to coding agent)'
 
 runs:
   using: 'node20'

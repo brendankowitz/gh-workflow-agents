@@ -650,6 +650,42 @@ ${instructions}
 }
 
 /**
+ * Assigns the AI research agent to analyze an issue before coding
+ * Adds the 'ready-for-research' label which triggers the research agent workflow
+ *
+ * @param octokit - Authenticated Octokit
+ * @param ref - Issue reference
+ * @param instructions - Instructions for the research agent
+ */
+export async function assignToResearchAgent(
+  octokit: Octokit,
+  ref: IssueRef,
+  instructions: string
+): Promise<void> {
+  await octokit.rest.issues.addLabels({
+    owner: ref.owner,
+    repo: ref.repo,
+    issue_number: ref.issueNumber,
+    labels: ['ready-for-research', 'status:in-progress'],
+  });
+
+  await octokit.rest.issues.createComment({
+    owner: ref.owner,
+    repo: ref.repo,
+    issue_number: ref.issueNumber,
+    body: `## 🔍 Assigned to AI Research Agent
+
+This issue will be analyzed for current best practices, framework standards, and engineering health before implementation.
+
+**Instructions:**
+${instructions}
+
+---
+*The research agent will post findings, then hand off to the coding agent.*`,
+  });
+}
+
+/**
  * Requests clarification on an ambiguous issue
  *
  * @param octokit - Authenticated Octokit

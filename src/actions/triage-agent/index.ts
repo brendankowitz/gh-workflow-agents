@@ -33,6 +33,7 @@ import {
   sendPrompt,
   parseAgentResponse,
   assignToCodingAgent,
+  assignToResearchAgent,
   requestClarification,
   closeIssue,
   createSubIssues,
@@ -214,6 +215,7 @@ MANDATORY RULES:
 Action definitions:
 - **create-sub-issues**: DEFAULT for research reports. Break into focused issues for each recommendation.
 - **assign-to-agent**: Single actionable issue that aligns with vision
+- **route-to-research**: Issue needs research analysis first (tech debt assessment, framework/standards evaluation, engineering system health, best practices review, or when current information beyond training data is needed)
 - **request-clarification**: Issue is too ambiguous (isActionable=false)
 - **close-as-wontfix**: Issue clearly conflicts with project vision (alignsWithVision=false)
 - **close-as-duplicate**: Feature/fix already exists in codebase
@@ -257,7 +259,7 @@ CRITICAL: Respond with ONLY a JSON object. No explanatory text. Start with { and
   "actionabilityReason": "Why this is/isn't actionable, referencing specific code",
   "alignsWithVision": true | false,
   "visionAlignmentReason": "How this aligns or conflicts with project vision",
-  "recommendedAction": "assign-to-agent" | "create-sub-issues" | "request-clarification" | "close-as-wontfix" | "close-as-duplicate" | "human-review",
+  "recommendedAction": "assign-to-agent" | "create-sub-issues" | "route-to-research" | "request-clarification" | "close-as-wontfix" | "close-as-duplicate" | "human-review",
   "filesExamined": ["src/config.ts", "src/anonymizer.ts"],
   "filesToModify": ["src/config/uscdi-v4.json", "src/validators/uscdi.ts"],
   "subIssues": [
@@ -379,6 +381,31 @@ This issue has been assessed as concrete and actionable. Please implement a solu
 
         await assignToCodingAgent(octokit, ref, assignmentInstructions + auditFooter);
         core.info(`Assigned issue #${issue.number} to AI coding agent`);
+        break;
+
+      case 'route-to-research':
+        // Issue needs research analysis before coding
+        const researchInstructions = `
+## Issue Summary
+${validated.summary}
+
+## Classification
+- **Type:** ${validated.classification}
+- **Priority:** ${validated.priority}
+
+## Context
+${validated.reasoning}
+
+## Research Focus
+This issue requires research analysis before implementation. Please investigate:
+1. Current best practices and standards relevant to this issue
+2. Similar approaches in other projects
+3. Technical feasibility and recommended approach
+4. Any risks or considerations for implementation
+        `.trim();
+
+        await assignToResearchAgent(octokit, ref, researchInstructions + auditFooter);
+        core.info(`Routed issue #${issue.number} to AI research agent`);
         break;
 
       case 'request-clarification':

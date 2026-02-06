@@ -115,7 +115,7 @@ export function validateTriageOutput(output: string | object): TriageResult {
   );
 
   // Validate recommended action
-  const allowedActions = ['assign-to-agent', 'request-clarification', 'close-as-wontfix', 'close-as-duplicate', 'human-review'] as const;
+  const allowedActions = ['assign-to-agent', 'request-clarification', 'close-as-wontfix', 'close-as-duplicate', 'human-review', 'create-sub-issues', 'route-to-research'] as const;
   type RecommendedAction = (typeof allowedActions)[number];
   const rawAction = String(parsed['recommendedAction'] || 'human-review').toLowerCase();
   const recommendedAction: RecommendedAction = allowedActions.includes(rawAction as RecommendedAction)

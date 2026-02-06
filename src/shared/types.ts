@@ -68,7 +68,7 @@ export interface TriageResult {
   /** How the issue aligns (or conflicts) with vision */
   visionAlignmentReason: string;
   /** Recommended action for this issue */
-  recommendedAction: 'assign-to-agent' | 'request-clarification' | 'close-as-wontfix' | 'close-as-duplicate' | 'human-review' | 'create-sub-issues';
+  recommendedAction: 'assign-to-agent' | 'request-clarification' | 'close-as-wontfix' | 'close-as-duplicate' | 'human-review' | 'create-sub-issues' | 'route-to-research';
   /** Sub-issues to create (when recommendedAction is 'create-sub-issues') */
   subIssues?: SubIssueDefinition[];
   /** Files examined during codebase exploration */
@@ -231,6 +231,7 @@ export const ALLOWED_LABELS = [
   'ready-for-agent',
   'assigned-to-agent',
   'agent-coded',
+  'ready-for-research',
   'has-sub-issues',
   'triaged',
   'stale',
