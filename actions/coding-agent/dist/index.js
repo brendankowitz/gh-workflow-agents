@@ -31108,7 +31108,7 @@ async function removeLabels(octokit, ref, labels) {
       });
     } catch (error3) {
       const msg = error3 instanceof Error ? error3.message.toLowerCase() : "";
-      const isNotFound = msg.includes("404") || msg.includes("not found") || msg.includes("does not exist");
+      const isNotFound = error3 && typeof error3 === "object" && "status" in error3 && error3.status === 404 || msg.includes("404") || msg.includes("not found") || msg.includes("does not exist");
       if (!isNotFound) {
         throw error3;
       }

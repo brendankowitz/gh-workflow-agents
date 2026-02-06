@@ -31771,6 +31771,100 @@ ${comment.body}
     throw error3;
   }
 }
+async function mergePullRequest(octokit, ref, mergeMethod = "squash") {
+  try {
+    const result = await octokit.rest.pulls.merge({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber,
+      merge_method: mergeMethod
+    });
+    if (result.status === 200) {
+      return {
+        merged: true,
+        message: `PR #${ref.pullNumber} merged successfully using ${mergeMethod}`
+      };
+    }
+    return {
+      merged: false,
+      message: `Unexpected response status: ${result.status}`
+    };
+  } catch (error3) {
+    if (error3.status === 405) {
+      return {
+        merged: false,
+        message: `Merge not allowed: ${error3.message || "PR may have conflicts or required checks not passing"}`
+      };
+    }
+    if (error3.status === 409) {
+      return {
+        merged: false,
+        message: `PR not mergeable: ${error3.message || "PR may be already merged or closed"}`
+      };
+    }
+    return {
+      merged: false,
+      message: `Merge failed: ${error3.message || "Unknown error"}`
+    };
+  }
+}
+async function closeLinkedIssue(octokit, ref) {
+  try {
+    const prResponse = await octokit.rest.pulls.get({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber
+    });
+    const prBody = prResponse.data.body || "";
+    const issueReferencePattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+    const matches = [...prBody.matchAll(issueReferencePattern)];
+    if (matches.length === 0) {
+      return;
+    }
+    for (const match of matches) {
+      if (!match[1])
+        continue;
+      const issueNumber = parseInt(match[1], 10);
+      try {
+        await octokit.rest.issues.createComment({
+          owner: ref.owner,
+          repo: ref.repo,
+          issue_number: issueNumber,
+          body: `\u2705 Closed automatically because PR #${ref.pullNumber} was merged.`
+        });
+        await octokit.rest.issues.update({
+          owner: ref.owner,
+          repo: ref.repo,
+          issue_number: issueNumber,
+          state: "closed"
+        });
+      } catch (error3) {
+        console.warn(`Failed to close issue #${issueNumber}: ${error3.message}`);
+      }
+    }
+  } catch (error3) {
+    console.warn(`Failed to close linked issues: ${error3.message}`);
+  }
+}
+async function getPullRequestReviews(octokit, ref) {
+  try {
+    const response = await octokit.rest.pulls.listReviews({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber
+    });
+    return response.data.map((review) => ({
+      id: review.id,
+      user: review.user?.login || "unknown",
+      state: review.state,
+      body: review.body || "",
+      commitId: review.commit_id || "",
+      submittedAt: review.submitted_at || ""
+    }));
+  } catch (error3) {
+    throw new Error(`Failed to fetch PR reviews: ${error3.message}`);
+  }
+}
 async function isDependabotPR(octokit, ref) {
   const response = await octokit.rest.pulls.get({
     owner: ref.owner,
@@ -37513,8 +37607,85 @@ async function run() {
     const event = mapAssessmentToEvent(validated);
     const reviewBody = buildReviewComment(validated);
     const inlineComments = buildInlineComments(validated);
+    let headSha = github.context.payload.pull_request?.head?.sha || "";
+    if (!headSha) {
+      try {
+        const prData = await octokit.rest.pulls.get({
+          owner: ref.owner,
+          repo: ref.repo,
+          pull_number: ref.pullNumber
+        });
+        headSha = prData.data.head.sha;
+      } catch (err) {
+        core3.warning(`Could not fetch PR head SHA: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    try {
+      const existingReviews = await getPullRequestReviews(reviewOctokit, ref);
+      const agentIdentity = "GH-Agency Review Agent";
+      if (headSha) {
+        const alreadyReviewed = existingReviews.some((r) => r.commitId === headSha && r.body.includes(agentIdentity));
+        if (alreadyReviewed) {
+          core3.info(`Already reviewed commit ${headSha.substring(0, 7)}, skipping duplicate review`);
+          core3.setOutput("review-result", "skipped-duplicate");
+          return;
+        }
+      }
+      const agentReviewCount = existingReviews.filter((r) => r.body.includes(agentIdentity)).length;
+      if (agentReviewCount >= 3) {
+        core3.warning(`PR has been reviewed ${agentReviewCount} times by agent. Auto-approving to prevent loop.`);
+        const loopBreakBody = buildReviewComment(validated) + `
+
+---
+
+\u26A0\uFE0F **Auto-approved after multiple review cycles.** This PR has been reviewed ${agentReviewCount} times. Approving to prevent infinite review loops. A human maintainer should verify the remaining suggestions above.`;
+        await createPullRequestReview(reviewOctokit, ref, "APPROVE", loopBreakBody, inlineComments);
+        core3.setOutput("review-result", "auto-approved-loop-break");
+        if (config.autoMerge) {
+          try {
+            const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some((l) => l.name === "agent-coded") || false;
+            if (hasAgentCodedLabel) {
+              core3.info("PR has agent-coded label and was auto-approved - attempting auto-merge");
+              const mergeResult = await mergePullRequest(octokit, ref);
+              if (mergeResult.merged) {
+                core3.info(`\u2705 ${mergeResult.message}`);
+                await closeLinkedIssue(octokit, ref);
+                core3.info("Closed linked issues");
+              } else {
+                core3.warning(`\u26A0\uFE0F Auto-merge failed: ${mergeResult.message}`);
+              }
+            }
+          } catch (error3) {
+            core3.warning(`Auto-merge error: ${error3 instanceof Error ? error3.message : error3}`);
+          }
+        }
+        return;
+      }
+    } catch (err) {
+      core3.warning(`Could not check for duplicate reviews: ${err instanceof Error ? err.message : String(err)}`);
+    }
     core3.info(`Posting review with assessment: ${validated.overallAssessment}`);
     await createPullRequestReview(reviewOctokit, ref, event, reviewBody, inlineComments);
+    if (event === "APPROVE" && config.autoMerge) {
+      try {
+        const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some((l) => l.name === "agent-coded") || false;
+        if (hasAgentCodedLabel) {
+          core3.info("PR has agent-coded label and was approved - attempting auto-merge");
+          const mergeResult = await mergePullRequest(octokit, ref);
+          if (mergeResult.merged) {
+            core3.info(`\u2705 ${mergeResult.message}`);
+            await closeLinkedIssue(octokit, ref);
+            core3.info("Closed linked issues");
+          } else {
+            core3.warning(`\u26A0\uFE0F Auto-merge failed: ${mergeResult.message}`);
+          }
+        } else {
+          core3.info("PR does not have agent-coded label - skipping auto-merge");
+        }
+      } catch (error3) {
+        core3.warning(`Auto-merge error: ${error3 instanceof Error ? error3.message : error3}`);
+      }
+    }
     const hasFixableIssues = validated.securityIssues.length > 0 || validated.codeQualityIssues.length > 0;
     if (hasFixableIssues && validated.overallAssessment !== "approve" && config.copilotToken) {
       try {
@@ -37566,7 +37737,8 @@ function getConfig() {
     model: core3.getInput("model") || "claude-sonnet-4.5",
     mode: core3.getInput("mode") || "full",
     autoApproveDependabot: core3.getBooleanInput("auto-approve-dependabot"),
-    securityFocus: core3.getBooleanInput("security-focus")
+    securityFocus: core3.getBooleanInput("security-focus"),
+    autoMerge: core3.getBooleanInput("auto-merge")
   };
 }
 async function getPRFromContext(octokit) {
@@ -37765,10 +37937,10 @@ function buildReviewComment(result) {
       if (typeof s === "string") {
         sections.push(`- ${s}`);
       } else if (s && typeof s === "object") {
-        const fileRef = s.file ? `**\`${s.file}\`**: ` : "";
-        const text = s.suggestion || s.description || s.text || JSON.stringify(s);
+        const fileRef = typeof s.file === "string" && s.file ? `**\`${s.file}\`**: ` : "";
+        const text = (typeof s.suggestion === "string" ? s.suggestion : null) || (typeof s.description === "string" ? s.description : null) || (typeof s.text === "string" ? s.text : null) || (typeof s.body === "string" ? s.body : null) || JSON.stringify(s);
         sections.push(`- ${fileRef}${text}`);
-        if (s.rationale) {
+        if (typeof s.rationale === "string" && s.rationale) {
           sections.push(`  - *Rationale: ${s.rationale}*`);
         }
       } else {

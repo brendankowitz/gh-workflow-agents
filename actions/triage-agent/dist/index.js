@@ -31286,7 +31286,7 @@ async function assignToCodingAgent(octokit, ref, instructions) {
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    labels: ["copilot-assigned", "status:in-progress"]
+    labels: ["copilot-assigned", "ready-for-agent", "status:in-progress"]
   });
   try {
     await octokit.rest.issues.addAssignees({

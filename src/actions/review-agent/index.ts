@@ -24,6 +24,7 @@ import {
   formatContextForPrompt,
   getPullRequestDiff,
   getPullRequestFiles,
+  getPullRequestReviews,
   createPullRequestReview,
   isDependabotPR,
   logAgentDecision,
@@ -36,6 +37,8 @@ import {
   hasCopilotAuth,
   hasAppAuth,
   getOctokitWithAppFallback,
+  mergePullRequest,
+  closeLinkedIssue,
   type PullRequestRef,
 } from '../../sdk/index.js';
 
@@ -47,6 +50,7 @@ interface ReviewConfig {
   mode: 'analyze-only' | 'full';
   autoApproveDependabot: boolean;
   securityFocus: boolean;
+  autoMerge: boolean;
 }
 
 /**
@@ -184,6 +188,83 @@ export async function run(): Promise<void> {
     // Build inline comments
     const inlineComments = buildInlineComments(validated);
 
+    // Get HEAD commit SHA for duplicate review check
+    let headSha = github.context.payload.pull_request?.head?.sha || '';
+    
+    // If headSha is not available (e.g., workflow_dispatch), fetch it from the API
+    if (!headSha) {
+      try {
+        const prData = await octokit.rest.pulls.get({
+          owner: ref.owner,
+          repo: ref.repo,
+          pull_number: ref.pullNumber,
+        });
+        headSha = prData.data.head.sha;
+      } catch (err) {
+        core.warning(`Could not fetch PR head SHA: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    
+    // Check for duplicate reviews on the same commit and track review iterations
+    try {
+      const existingReviews = await getPullRequestReviews(reviewOctokit, ref);
+      const agentIdentity = 'GH-Agency Review Agent';
+      
+      // Check if we already reviewed this exact commit
+      if (headSha) {
+        const alreadyReviewed = existingReviews.some(
+          r => r.commitId === headSha && r.body.includes(agentIdentity)
+        );
+        if (alreadyReviewed) {
+          core.info(`Already reviewed commit ${headSha.substring(0, 7)}, skipping duplicate review`);
+          core.setOutput('review-result', 'skipped-duplicate');
+          return;
+        }
+      }
+      
+      // Track review iterations - prevent infinite review→code→review loops
+      const agentReviewCount = existingReviews.filter(r => r.body.includes(agentIdentity)).length;
+      
+      if (agentReviewCount >= 3) {
+        core.warning(`PR has been reviewed ${agentReviewCount} times by agent. Auto-approving to prevent loop.`);
+        // Force approve after 3 reviews to break potential loops
+        const loopBreakBody = buildReviewComment(validated) 
+          + '\n\n---\n\n⚠️ **Auto-approved after multiple review cycles.** This PR has been reviewed '
+          + `${agentReviewCount} times. Approving to prevent infinite review loops. `
+          + 'A human maintainer should verify the remaining suggestions above.';
+        await createPullRequestReview(reviewOctokit, ref, 'APPROVE', loopBreakBody, inlineComments);
+        core.setOutput('review-result', 'auto-approved-loop-break');
+        
+        // Auto-merge logic still applies if enabled
+        if (config.autoMerge) {
+          try {
+            const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some(
+              (l: any) => l.name === 'agent-coded'
+            ) || false;
+            
+            if (hasAgentCodedLabel) {
+              core.info('PR has agent-coded label and was auto-approved - attempting auto-merge');
+              const mergeResult = await mergePullRequest(octokit, ref);
+              
+              if (mergeResult.merged) {
+                core.info(`✅ ${mergeResult.message}`);
+                await closeLinkedIssue(octokit, ref);
+                core.info('Closed linked issues');
+              } else {
+                core.warning(`⚠️ Auto-merge failed: ${mergeResult.message}`);
+              }
+            }
+          } catch (error) {
+            core.warning(`Auto-merge error: ${error instanceof Error ? error.message : error}`);
+          }
+        }
+        return;
+      }
+    } catch (err) {
+      core.warning(`Could not check for duplicate reviews: ${err instanceof Error ? err.message : String(err)}`);
+      // Continue with review even if duplicate check fails
+    }
+
     // Post the review (using App-authenticated octokit if available)
     core.info(`Posting review with assessment: ${validated.overallAssessment}`);
     await createPullRequestReview(
@@ -193,6 +274,37 @@ export async function run(): Promise<void> {
       reviewBody,
       inlineComments
     );
+
+    // Auto-merge logic: if review is APPROVE and PR has agent-coded label
+    if (event === 'APPROVE' && config.autoMerge) {
+      try {
+        // Check if PR has the 'agent-coded' label
+        const hasAgentCodedLabel = github.context.payload.pull_request?.labels?.some(
+          (l: any) => l.name === 'agent-coded'
+        ) || false;
+
+        if (hasAgentCodedLabel) {
+          core.info('PR has agent-coded label and was approved - attempting auto-merge');
+          
+          // Use the main octokit (with write permissions) for merge, not reviewOctokit
+          const mergeResult = await mergePullRequest(octokit, ref);
+          
+          if (mergeResult.merged) {
+            core.info(`✅ ${mergeResult.message}`);
+            
+            // Close linked issues
+            await closeLinkedIssue(octokit, ref);
+            core.info('Closed linked issues');
+          } else {
+            core.warning(`⚠️ Auto-merge failed: ${mergeResult.message}`);
+          }
+        } else {
+          core.info('PR does not have agent-coded label - skipping auto-merge');
+        }
+      } catch (error) {
+        core.warning(`Auto-merge error: ${error instanceof Error ? error.message : error}`);
+      }
+    }
 
     // If there are fixable issues and we have a user token, post @copilot mention
     // using the user's PAT so Copilot responds (bots can't trigger Copilot)
@@ -272,6 +384,7 @@ function getConfig(): ReviewConfig {
     mode: (core.getInput('mode') || 'full') as 'analyze-only' | 'full',
     autoApproveDependabot: core.getBooleanInput('auto-approve-dependabot'),
     securityFocus: core.getBooleanInput('security-focus'),
+    autoMerge: core.getBooleanInput('auto-merge'),
   };
 }
 
@@ -583,10 +696,14 @@ function buildReviewComment(result: ReviewResult): string {
       if (typeof s === 'string') {
         sections.push(`- ${s}`);
       } else if (s && typeof s === 'object') {
-        const fileRef = s.file ? `**\`${s.file}\`**: ` : '';
-        const text = s.suggestion || s.description || s.text || JSON.stringify(s);
+        const fileRef = (typeof s.file === 'string' && s.file) ? `**\`${s.file}\`**: ` : '';
+        const text = (typeof s.suggestion === 'string' ? s.suggestion : null)
+          || (typeof s.description === 'string' ? s.description : null)
+          || (typeof s.text === 'string' ? s.text : null)
+          || (typeof s.body === 'string' ? s.body : null)
+          || JSON.stringify(s);
         sections.push(`- ${fileRef}${text}`);
-        if (s.rationale) {
+        if (typeof s.rationale === 'string' && s.rationale) {
           sections.push(`  - *Rationale: ${s.rationale}*`);
         }
       } else {

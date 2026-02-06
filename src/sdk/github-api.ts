@@ -79,7 +79,9 @@ export async function removeLabels(
     } catch (error) {
       // Ignore errors if label doesn't exist on issue (404 or "Label does not exist")
       const msg = error instanceof Error ? error.message.toLowerCase() : '';
-      const isNotFound = msg.includes('404') || msg.includes('not found') || msg.includes('does not exist');
+      const isNotFound =
+        (error && typeof error === 'object' && 'status' in error && (error as any).status === 404) ||
+        msg.includes('404') || msg.includes('not found') || msg.includes('does not exist');
       if (!isNotFound) {
         throw error;
       }
@@ -320,6 +322,152 @@ export async function createPullRequestReview(
 }
 
 /**
+ * Merges a pull request
+ *
+ * @param octokit - Authenticated Octokit with write permissions
+ * @param ref - Pull request reference
+ * @param mergeMethod - Merge method (default: 'squash')
+ * @returns Result indicating if merge succeeded
+ */
+export async function mergePullRequest(
+  octokit: Octokit,
+  ref: PullRequestRef,
+  mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash'
+): Promise<{ merged: boolean; message: string }> {
+  try {
+    const result = await octokit.rest.pulls.merge({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber,
+      merge_method: mergeMethod,
+    });
+
+    if (result.status === 200) {
+      return {
+        merged: true,
+        message: `PR #${ref.pullNumber} merged successfully using ${mergeMethod}`,
+      };
+    }
+
+    return {
+      merged: false,
+      message: `Unexpected response status: ${result.status}`,
+    };
+  } catch (error: any) {
+    // Handle common merge failures gracefully
+    if (error.status === 405) {
+      // Merge not allowed (e.g., checks not passing, conflicts)
+      return {
+        merged: false,
+        message: `Merge not allowed: ${error.message || 'PR may have conflicts or required checks not passing'}`,
+      };
+    }
+
+    if (error.status === 409) {
+      // PR not mergeable (e.g., already merged, closed)
+      return {
+        merged: false,
+        message: `PR not mergeable: ${error.message || 'PR may be already merged or closed'}`,
+      };
+    }
+
+    // For other errors, log and return failure
+    return {
+      merged: false,
+      message: `Merge failed: ${error.message || 'Unknown error'}`,
+    };
+  }
+}
+
+/**
+ * Closes linked issues referenced in a PR body
+ *
+ * @param octokit - Authenticated Octokit with write permissions
+ * @param ref - Pull request reference
+ */
+export async function closeLinkedIssue(
+  octokit: Octokit,
+  ref: PullRequestRef
+): Promise<void> {
+  try {
+    // Fetch the PR to get its body
+    const prResponse = await octokit.rest.pulls.get({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber,
+    });
+
+    const prBody = prResponse.data.body || '';
+
+    // Find issue references (e.g., "Closes #123", "Fixes #456", "Resolves #789")
+    const issueReferencePattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+    const matches = [...prBody.matchAll(issueReferencePattern)];
+
+    if (matches.length === 0) {
+      return;
+    }
+
+    // Close each referenced issue
+    for (const match of matches) {
+      if (!match[1]) continue;
+      const issueNumber = parseInt(match[1], 10);
+      try {
+        await octokit.rest.issues.createComment({
+          owner: ref.owner,
+          repo: ref.repo,
+          issue_number: issueNumber,
+          body: `✅ Closed automatically because PR #${ref.pullNumber} was merged.`,
+        });
+
+        await octokit.rest.issues.update({
+          owner: ref.owner,
+          repo: ref.repo,
+          issue_number: issueNumber,
+          state: 'closed',
+        });
+      } catch (error: any) {
+        // Ignore individual issue close failures (may already be closed or not exist)
+        console.warn(`Failed to close issue #${issueNumber}: ${error.message}`);
+      }
+    }
+  } catch (error: any) {
+    // Ignore failures in fetching PR or closing issues
+    console.warn(`Failed to close linked issues: ${error.message}`);
+  }
+}
+
+/**
+ * Gets reviews for a pull request
+ *
+ * @param octokit - Authenticated Octokit
+ * @param ref - Pull request reference
+ * @returns Array of reviews
+ */
+export async function getPullRequestReviews(
+  octokit: Octokit,
+  ref: PullRequestRef
+): Promise<Array<{ id: number; user: string; state: string; body: string; commitId: string; submittedAt: string }>> {
+  try {
+    const response = await octokit.rest.pulls.listReviews({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.pullNumber,
+    });
+
+    return response.data.map((review) => ({
+      id: review.id,
+      user: review.user?.login || 'unknown',
+      state: review.state,
+      body: review.body || '',
+      commitId: review.commit_id || '',
+      submittedAt: review.submitted_at || '',
+    }));
+  } catch (error: any) {
+    throw new Error(`Failed to fetch PR reviews: ${error.message}`);
+  }
+}
+
+/**
  * Checks if a PR is from Dependabot
  *
  * @param octokit - Authenticated Octokit
@@ -414,7 +562,7 @@ export async function assignToCodingAgent(
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    labels: ['copilot-assigned', 'status:in-progress'],
+    labels: ['copilot-assigned', 'ready-for-agent', 'status:in-progress'],
   });
 
   // Assign the issue to Copilot - this triggers the coding agent
