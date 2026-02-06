@@ -1937,10 +1937,9 @@ async function commitAndPush(
 
 /**
  * Last-resort fallback: commit and push using git CLI.
- * Tries multiple tokens: first the checkout token (already configured),
- * then GITHUB_TOKEN, then copilotToken — because the checkout token may
- * lack push access, and the REST API may block workflow file changes that
- * git push allows.
+ * Tries multiple tokens by switching the remote URL credentials.
+ * GITHUB_TOKEN is tried first since the workflow grants contents:write,
+ * then the copilotToken/PAT which may have broader scopes (e.g. workflows).
  */
 async function commitAndPushWithGit(
   changes: CodeChanges,
@@ -2004,61 +2003,92 @@ async function commitAndPushWithGit(
       env: { ...process.env, MSG: commitMsg },
     });
 
-    // Try pushing with multiple tokens.
-    // The checkout token may differ from GITHUB_TOKEN, and the REST API
-    // blocks GITHUB_TOKEN from creating git trees with .github/workflows/ files,
-    // but git push with GITHUB_TOKEN CAN push workflow file changes.
+    // Try pushing with multiple tokens by switching remote URL credentials.
+    // We clear the extraheader (set by actions/checkout) and embed the token
+    // directly in the remote URL for reliable auth switching.
     const { owner, repo } = github.context.repo;
+
+    // Build ordered list of tokens to try.
+    // GITHUB_TOKEN first (workflow grants contents:write, can push workflow files via git),
+    // then copilotToken/PAT (may have additional scopes like workflows).
     const tokensToTry: Array<{ label: string; token: string }> = [];
 
-    // 1. First try the already-configured checkout token
-    tokensToTry.push({ label: 'checkout token', token: '' }); // empty = use existing config
-
-    // 2. Try GITHUB_TOKEN (may differ from checkout token)
     if (config.githubToken) {
       tokensToTry.push({ label: 'GITHUB_TOKEN', token: config.githubToken });
     }
-
-    // 3. Try copilotToken/PAT
     if (config.copilotToken && config.copilotToken !== config.githubToken) {
       tokensToTry.push({ label: 'copilot PAT', token: config.copilotToken });
     }
 
+    // Check which files we're pushing (for error diagnostics)
+    const hasWorkflowFiles = changes.files.some(f =>
+      f.path.startsWith('.github/workflows/') && f.operation !== 'delete'
+    );
+    if (hasWorkflowFiles) {
+      core.info('  Note: Changes include .github/workflows/ files (requires workflow push permissions)');
+    }
+
     let pushSucceeded = false;
+    const pushErrors: string[] = [];
+
     for (const { label, token } of tokensToTry) {
       try {
-        if (token) {
-          // Override the extraheader that actions/checkout configured.
-          // actions/checkout uses http.extraheader for auth, not the remote URL,
-          // so git remote set-url alone doesn't change the auth token.
-          const basicAuth = Buffer.from(`x-access-token:${token}`).toString('base64');
-          execSync(
-            `git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basicAuth}"`,
-            { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
-          );
-          core.info(`  Pushing with ${label}...`);
-        } else {
-          core.info(`  Pushing with ${label} (already configured)...`);
-        }
+        // Clear the extraheader that actions/checkout configured, then set
+        // the remote URL with embedded credentials. This is more reliable
+        // than trying to override the extraheader value.
+        execSync(
+          'git config --local --unset-all http.https://github.com/.extraheader || true',
+          { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+        );
+        const remoteUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+        execSync(
+          `git remote set-url origin "${remoteUrl}"`,
+          { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+        );
+        core.info(`  Pushing with ${label}...`);
 
         gitExec(`git push origin ${branchName} --force-with-lease`);
         pushSucceeded = true;
         core.info(`  Push succeeded with ${label}`);
         break;
-      } catch (pushError) {
-        const pushMsg = pushError instanceof Error ? pushError.message : String(pushError);
-        core.warning(`  Push failed with ${label}: ${pushMsg.split('\n')[0]}`);
+      } catch (pushError: any) {
+        // Capture the full stderr for diagnostics
+        const stderr = pushError?.stderr || '';
+        const msg = pushError?.message || String(pushError);
+        // Log full error (not just first line) so we can diagnose
+        const fullErr = stderr ? String(stderr).trim() : msg;
+        core.warning(`  Push failed with ${label}:\n${fullErr}`);
+        pushErrors.push(`${label}: ${fullErr}`);
       }
     }
 
     if (!pushSucceeded) {
       core.error('All git push attempts failed');
+      // Provide actionable diagnostics
+      if (hasWorkflowFiles) {
+        core.error(
+          'Changes include .github/workflows/ files. To push workflow files:\n' +
+          '  - GITHUB_TOKEN: requires the workflow to have contents:write permission\n' +
+          '  - PAT (fine-grained): requires "Contents: Read and write" AND "Workflows: Read and write" permissions\n' +
+          '  - PAT (classic): requires the "workflow" scope\n' +
+          'Check that your COPILOT_GITHUB_TOKEN has the necessary permissions for this repository.'
+        );
+      }
+      for (const err of pushErrors) {
+        core.error(`  ${err}`);
+      }
       return { branchName, commitSha: '', pushedSuccessfully: false };
     }
 
     // Get the commit SHA
     const commitSha = gitExec('git rev-parse HEAD');
     core.info(`Git CLI commit successful: ${commitSha}`);
+
+    // Sanitize remote URL (remove token) to prevent accidental exposure
+    execSync(
+      `git remote set-url origin "https://github.com/${owner}/${repo}.git"`,
+      { cwd: workspace, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    );
 
     return { branchName, commitSha, pushedSuccessfully: true };
   } catch (error) {

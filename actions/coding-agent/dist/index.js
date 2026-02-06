@@ -33934,38 +33934,50 @@ async function commitAndPushWithGit(changes, task, config) {
     });
     const { owner, repo } = github.context.repo;
     const tokensToTry = [];
-    tokensToTry.push({ label: "checkout token", token: "" });
     if (config.githubToken) {
       tokensToTry.push({ label: "GITHUB_TOKEN", token: config.githubToken });
     }
     if (config.copilotToken && config.copilotToken !== config.githubToken) {
       tokensToTry.push({ label: "copilot PAT", token: config.copilotToken });
     }
+    const hasWorkflowFiles = changes.files.some((f) => f.path.startsWith(".github/workflows/") && f.operation !== "delete");
+    if (hasWorkflowFiles) {
+      core3.info("  Note: Changes include .github/workflows/ files (requires workflow push permissions)");
+    }
     let pushSucceeded = false;
+    const pushErrors = [];
     for (const { label, token } of tokensToTry) {
       try {
-        if (token) {
-          const basicAuth = Buffer.from(`x-access-token:${token}`).toString("base64");
-          execSync(`git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basicAuth}"`, { cwd: workspace, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
-          core3.info(`  Pushing with ${label}...`);
-        } else {
-          core3.info(`  Pushing with ${label} (already configured)...`);
-        }
+        execSync("git config --local --unset-all http.https://github.com/.extraheader || true", { cwd: workspace, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+        const remoteUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+        execSync(`git remote set-url origin "${remoteUrl}"`, { cwd: workspace, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+        core3.info(`  Pushing with ${label}...`);
         gitExec(`git push origin ${branchName} --force-with-lease`);
         pushSucceeded = true;
         core3.info(`  Push succeeded with ${label}`);
         break;
       } catch (pushError) {
-        const pushMsg = pushError instanceof Error ? pushError.message : String(pushError);
-        core3.warning(`  Push failed with ${label}: ${pushMsg.split("\n")[0]}`);
+        const stderr = pushError?.stderr || "";
+        const msg = pushError?.message || String(pushError);
+        const fullErr = stderr ? String(stderr).trim() : msg;
+        core3.warning(`  Push failed with ${label}:
+${fullErr}`);
+        pushErrors.push(`${label}: ${fullErr}`);
       }
     }
     if (!pushSucceeded) {
       core3.error("All git push attempts failed");
+      if (hasWorkflowFiles) {
+        core3.error('Changes include .github/workflows/ files. To push workflow files:\n  - GITHUB_TOKEN: requires the workflow to have contents:write permission\n  - PAT (fine-grained): requires "Contents: Read and write" AND "Workflows: Read and write" permissions\n  - PAT (classic): requires the "workflow" scope\nCheck that your COPILOT_GITHUB_TOKEN has the necessary permissions for this repository.');
+      }
+      for (const err of pushErrors) {
+        core3.error(`  ${err}`);
+      }
       return { branchName, commitSha: "", pushedSuccessfully: false };
     }
     const commitSha = gitExec("git rev-parse HEAD");
     core3.info(`Git CLI commit successful: ${commitSha}`);
+    execSync(`git remote set-url origin "https://github.com/${owner}/${repo}.git"`, { cwd: workspace, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
     return { branchName, commitSha, pushedSuccessfully: true };
   } catch (error3) {
     core3.error(`Git CLI fallback failed: ${error3 instanceof Error ? error3.message : String(error3)}`);
