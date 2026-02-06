@@ -345,6 +345,32 @@ export async function run(): Promise<void> {
       core.info(`Committed and pushed to branch: ${commitResult.branchName}`);
     } else {
       core.error(`Failed to push to branch: ${commitResult.branchName}`);
+
+      // Graceful fallback: post generated code as a comment so the work isn't lost
+      if (changes.files.length > 0 && (task.issueNumber || task.prNumber)) {
+        const targetNumber = task.issueNumber || task.prNumber || 0;
+        const issueRef: IssueRef = {
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          issueNumber: targetNumber,
+        };
+        const hasWorkflowFiles = changes.files.some(f =>
+          f.path.startsWith('.github/workflows/') && f.operation !== 'delete'
+        );
+        const filesSection = changes.files
+          .filter(f => f.content)
+          .map(f => `### \`${f.path}\`\n\`\`\`${f.path.endsWith('.yml') || f.path.endsWith('.yaml') ? 'yaml' : ''}\n${f.content}\n\`\`\``)
+          .join('\n\n');
+        const permNote = hasWorkflowFiles
+          ? '\n\n> **Note:** This push failed because the token lacks permission to create/update workflow files (`.github/workflows/`). ' +
+            'To enable automatic pushes, ensure the `COPILOT_GITHUB_TOKEN` PAT has **Contents: Read and write** and **Workflows: Read and write** permissions for this repository.'
+          : '';
+        await createComment(octokit, issueRef,
+          `## Unable to Push Changes\n\nThe coding agent generated the following changes but could not push them to the repository.${permNote}\n\n` +
+          `**Please add these files manually:**\n\n${filesSection}\n\n---\n*Summary: ${changes.summary || 'N/A'}*`
+        );
+        core.info('Posted generated code as comment on issue (fallback for push failure)');
+      }
     }
 
     // Phase 5: Manage PR (create or update)

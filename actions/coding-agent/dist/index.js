@@ -32809,6 +32809,31 @@ If you still need changes, please:
       core3.info(`Committed and pushed to branch: ${commitResult.branchName}`);
     } else {
       core3.error(`Failed to push to branch: ${commitResult.branchName}`);
+      if (changes.files.length > 0 && (task.issueNumber || task.prNumber)) {
+        const targetNumber2 = task.issueNumber || task.prNumber || 0;
+        const issueRef = {
+          owner: github.context.repo.owner,
+          repo: github.context.repo.repo,
+          issueNumber: targetNumber2
+        };
+        const hasWorkflowFiles = changes.files.some((f) => f.path.startsWith(".github/workflows/") && f.operation !== "delete");
+        const filesSection = changes.files.filter((f) => f.content).map((f) => `### \`${f.path}\`
+\`\`\`${f.path.endsWith(".yml") || f.path.endsWith(".yaml") ? "yaml" : ""}
+${f.content}
+\`\`\``).join("\n\n");
+        const permNote = hasWorkflowFiles ? "\n\n> **Note:** This push failed because the token lacks permission to create/update workflow files (`.github/workflows/`). To enable automatic pushes, ensure the `COPILOT_GITHUB_TOKEN` PAT has **Contents: Read and write** and **Workflows: Read and write** permissions for this repository." : "";
+        await createComment(octokit, issueRef, `## Unable to Push Changes
+
+The coding agent generated the following changes but could not push them to the repository.${permNote}
+
+**Please add these files manually:**
+
+${filesSection}
+
+---
+*Summary: ${changes.summary || "N/A"}*`);
+        core3.info("Posted generated code as comment on issue (fallback for push failure)");
+      }
     }
     core3.info("Phase 5: Managing pull request...");
     const prResult = await managePR(commitResult, task, changes, octokit, config);
