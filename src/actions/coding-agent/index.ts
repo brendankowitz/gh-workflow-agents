@@ -1799,6 +1799,40 @@ async function commitAndPush(
       branchSha = existingRef.object.sha;
       branchExists = true;
       core.info(`Branch already exists, will update from ${branchSha.substring(0, 7)}`);
+
+      // Check if branch is behind base - if so, merge base into branch first
+      try {
+        const { data: comparison } = await octokit.rest.repos.compareCommits({
+          owner,
+          repo,
+          base: branchName,
+          head: defaultBranch,
+        });
+        if (comparison.ahead_by > 0) {
+          core.info(`Branch is ${comparison.ahead_by} commit(s) behind ${defaultBranch}, merging base...`);
+          try {
+            const { data: mergeResult } = await octokit.rest.repos.merge({
+              owner,
+              repo,
+              base: branchName,
+              head: defaultBranch,
+              commit_message: `Merge ${defaultBranch} into ${branchName} to resolve conflicts`,
+            });
+            branchSha = mergeResult.sha;
+            core.info(`Merged ${defaultBranch} into branch, new SHA: ${branchSha.substring(0, 7)}`);
+          } catch (mergeErr: any) {
+            if (mergeErr.status === 409) {
+              core.warning(`Merge conflict detected between ${branchName} and ${defaultBranch}. Will force-push rebased changes.`);
+              // Fall back to basing changes on the default branch head
+              branchSha = baseSha;
+            } else {
+              throw mergeErr;
+            }
+          }
+        }
+      } catch (compareErr) {
+        core.warning(`Could not compare branches: ${compareErr instanceof Error ? compareErr.message : String(compareErr)}`);
+      }
     } catch (error) {
       // Branch doesn't exist, will create it
       core.info('Branch does not exist, will create new branch');
@@ -1894,7 +1928,7 @@ async function commitAndPush(
         repo,
         ref: `heads/${branchName}`,
         sha: newCommit.sha,
-        force: false, // Don't force push
+        force: true, // Force push to handle rebased/conflict-resolved branches
       });
     } else {
       core.info(`Creating new branch ${branchName}...`);

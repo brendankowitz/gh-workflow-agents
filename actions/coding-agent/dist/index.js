@@ -33760,6 +33760,37 @@ async function commitAndPush(changes, task, config) {
       branchSha = existingRef.object.sha;
       branchExists = true;
       core3.info(`Branch already exists, will update from ${branchSha.substring(0, 7)}`);
+      try {
+        const { data: comparison } = await octokit.rest.repos.compareCommits({
+          owner,
+          repo,
+          base: branchName,
+          head: defaultBranch
+        });
+        if (comparison.ahead_by > 0) {
+          core3.info(`Branch is ${comparison.ahead_by} commit(s) behind ${defaultBranch}, merging base...`);
+          try {
+            const { data: mergeResult } = await octokit.rest.repos.merge({
+              owner,
+              repo,
+              base: branchName,
+              head: defaultBranch,
+              commit_message: `Merge ${defaultBranch} into ${branchName} to resolve conflicts`
+            });
+            branchSha = mergeResult.sha;
+            core3.info(`Merged ${defaultBranch} into branch, new SHA: ${branchSha.substring(0, 7)}`);
+          } catch (mergeErr) {
+            if (mergeErr.status === 409) {
+              core3.warning(`Merge conflict detected between ${branchName} and ${defaultBranch}. Will force-push rebased changes.`);
+              branchSha = baseSha;
+            } else {
+              throw mergeErr;
+            }
+          }
+        }
+      } catch (compareErr) {
+        core3.warning(`Could not compare branches: ${compareErr instanceof Error ? compareErr.message : String(compareErr)}`);
+      }
     } catch (error3) {
       core3.info("Branch does not exist, will create new branch");
     }
@@ -33837,8 +33868,8 @@ ${changes.summary}
         repo,
         ref: `heads/${branchName}`,
         sha: newCommit.sha,
-        force: false
-        // Don't force push
+        force: true
+        // Force push to handle rebased/conflict-resolved branches
       });
     } else {
       core3.info(`Creating new branch ${branchName}...`);

@@ -20,6 +20,7 @@ import {
 } from '../../shared/index.js';
 import {
   createOctokit,
+  createComment,
   loadRepositoryContext,
   formatContextForPrompt,
   getPullRequestDiff,
@@ -297,6 +298,17 @@ export async function run(): Promise<void> {
             core.info('Closed linked issues');
           } else {
             core.warning(`⚠️ Auto-merge failed: ${mergeResult.message}`);
+            // Post a comment so the coding agent or human knows merge failed
+            try {
+              const issueRef = { owner: ref.owner, repo: ref.repo, issueNumber: ref.pullNumber };
+              await createComment(octokit, issueRef,
+                `⚠️ **Auto-merge failed**: ${mergeResult.message}\n\n` +
+                'This may be due to merge conflicts or failing status checks. ' +
+                'To resolve, comment `/agent fix resolve merge conflicts` or manually rebase the branch.'
+              );
+            } catch {
+              // Best-effort comment
+            }
           }
         } else {
           core.info('PR does not have agent-coded label - skipping auto-merge');

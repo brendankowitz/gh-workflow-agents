@@ -37678,6 +37678,13 @@ async function run() {
             core3.info("Closed linked issues");
           } else {
             core3.warning(`\u26A0\uFE0F Auto-merge failed: ${mergeResult.message}`);
+            try {
+              const issueRef = { owner: ref.owner, repo: ref.repo, issueNumber: ref.pullNumber };
+              await createComment(octokit, issueRef, `\u26A0\uFE0F **Auto-merge failed**: ${mergeResult.message}
+
+This may be due to merge conflicts or failing status checks. To resolve, comment \`/agent fix resolve merge conflicts\` or manually rebase the branch.`);
+            } catch {
+            }
           }
         } else {
           core3.info("PR does not have agent-coded label - skipping auto-merge");
