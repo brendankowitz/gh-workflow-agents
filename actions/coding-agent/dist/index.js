@@ -32671,8 +32671,17 @@ async function run() {
   try {
     const config = getConfig();
     const actor = github.context.actor;
+    const eventName = github.context.eventName;
     if (isBot(actor)) {
-      core3.info(`Skipping coding for bot actor: ${actor}`);
+      if (eventName !== "pull_request_review") {
+        core3.info(`Skipping coding for bot actor: ${actor}`);
+        return;
+      }
+      core3.info(`Bot actor ${actor} submitted a review - proceeding with feedback handling`);
+    }
+    const isAgentCommand = eventName === "issue_comment" && hasAgentCommand(github.context.payload.comment?.body || "");
+    if (eventName === "issue_comment" && !isAgentCommand) {
+      core3.info("Comment does not contain /agent command, skipping");
       return;
     }
     const circuitBreaker = createCircuitBreakerContext();
@@ -32808,6 +32817,18 @@ function getConfig() {
     dryRun: core3.getBooleanInput("dry-run")
   };
 }
+function hasAgentCommand(body) {
+  return /^\s*\/agent\b/im.test(body);
+}
+function parseAgentCommand(body) {
+  const match = body.match(/^\s*\/agent\s+(\S+)(?:\s+(.*))?/im);
+  if (!match || !match[1])
+    return null;
+  return {
+    command: match[1].toLowerCase(),
+    instructions: (match[2] || "").trim()
+  };
+}
 async function getTaskFromContext(octokit) {
   const payload = github.context.payload;
   const eventName = github.context.eventName;
@@ -32930,6 +32951,81 @@ ${payload.pull_request.body || ""}`, "pr-content").sanitized,
         existingBranch: branchValidation.sanitized
         // Store sanitized branch name
       };
+    }
+  }
+  if (eventName === "issue_comment" && payload.comment && payload.issue) {
+    const agentCmd = parseAgentCommand(payload.comment.body || "");
+    if (agentCmd) {
+      const isPR = !!payload.issue.pull_request;
+      core3.info(`/agent ${agentCmd.command} command received (isPR: ${isPR})`);
+      if (isPR) {
+        const prNumber = payload.issue.number;
+        try {
+          const { data: pr } = await octokit.rest.pulls.get({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            pull_number: prNumber
+          });
+          const { data: reviews } = await octokit.rest.pulls.listReviews({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            pull_number: prNumber
+          });
+          const latestReview = reviews.reverse().find((r) => r.state === "CHANGES_REQUESTED");
+          let reviewComments = [];
+          if (latestReview) {
+            try {
+              const { data: comments } = await octokit.rest.pulls.listReviewComments({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                pull_number: prNumber
+              });
+              reviewComments = comments.filter((c) => c.pull_request_review_id === latestReview.id).map((c) => `**${c.path}:${c.line}** - ${c.body}`).filter((c) => c.trim().length > 0);
+            } catch (error3) {
+              core3.warning(`Failed to fetch review comments: ${error3 instanceof Error ? error3.message : String(error3)}`);
+            }
+          }
+          let fullFeedback = "";
+          if (latestReview?.body) {
+            fullFeedback = latestReview.body;
+          }
+          if (reviewComments.length > 0) {
+            fullFeedback += "\n\n### Inline Review Comments\n\n" + reviewComments.join("\n\n");
+          }
+          const humanInstruction = agentCmd.instructions ? `
+
+### Human Instruction
+
+${agentCmd.instructions}` : "";
+          fullFeedback = humanInstruction + (fullFeedback ? "\n\n### Review Feedback\n\n" + fullFeedback : "");
+          const branchValidation = validateBranchName(pr.head.ref);
+          return {
+            type: "pr-feedback",
+            prNumber: pr.number,
+            content: sanitizeInput(`${pr.title}
+
+${pr.body || ""}`, "pr-content").sanitized,
+            reviewFeedback: sanitizeInput(fullFeedback, "review-feedback").sanitized,
+            existingBranch: branchValidation.sanitized,
+            agentCommand: agentCmd.command
+          };
+        } catch (error3) {
+          core3.warning(`Failed to fetch PR #${prNumber}: ${error3 instanceof Error ? error3.message : String(error3)}`);
+        }
+      } else {
+        return {
+          type: "issue",
+          issueNumber: payload.issue.number,
+          content: sanitizeInput(`${payload.issue.title}
+
+${payload.issue.body || ""}` + (agentCmd.instructions ? `
+
+### Human Instruction
+
+${agentCmd.instructions}` : ""), "issue-content").sanitized,
+          agentCommand: agentCmd.command
+        };
+      }
     }
   }
   return null;

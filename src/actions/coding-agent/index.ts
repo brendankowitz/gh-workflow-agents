@@ -48,6 +48,7 @@ interface CodingTask {
   content: string;
   reviewFeedback?: string;
   existingBranch?: string; // For PR feedback: the PR's head branch
+  agentCommand?: string; // Human-issued /agent command text
 }
 
 /** Task plan from planning phase */
@@ -161,10 +162,25 @@ export async function run(): Promise<void> {
     // Get configuration
     const config = getConfig();
 
-    // Check for bot actors
+    // Check for bot actors - but allow review bots to trigger feedback loops
+    // and allow /agent commands from any source
     const actor = github.context.actor;
+    const eventName = github.context.eventName;
     if (isBot(actor)) {
-      core.info(`Skipping coding for bot actor: ${actor}`);
+      // For pull_request_review events, the actor is the reviewer (a bot like ignixa-bot).
+      // The coding agent should still respond to review feedback from bots.
+      // Only skip if this is NOT a review event (e.g., a bot opened an issue).
+      if (eventName !== 'pull_request_review') {
+        core.info(`Skipping coding for bot actor: ${actor}`);
+        return;
+      }
+      core.info(`Bot actor ${actor} submitted a review - proceeding with feedback handling`);
+    }
+
+    // Check for /agent command in issue_comment events
+    const isAgentCommand = eventName === 'issue_comment' && hasAgentCommand(github.context.payload.comment?.body || '');
+    if (eventName === 'issue_comment' && !isAgentCommand) {
+      core.info('Comment does not contain /agent command, skipping');
       return;
     }
 
@@ -374,6 +390,29 @@ function getConfig(): CodingConfig {
 }
 
 /**
+ * Checks if a comment contains an /agent command
+ * Supported commands:
+ *   /agent fix [instructions] - Fix review issues on a PR
+ *   /agent implement [instructions] - Implement an issue
+ *   /agent update [instructions] - Update code based on instructions
+ */
+function hasAgentCommand(body: string): boolean {
+  return /^\s*\/agent\b/im.test(body);
+}
+
+/**
+ * Extracts the /agent command and any instructions from a comment
+ */
+function parseAgentCommand(body: string): { command: string; instructions: string } | null {
+  const match = body.match(/^\s*\/agent\s+(\S+)(?:\s+(.*))?/im);
+  if (!match || !match[1]) return null;
+  return {
+    command: match[1].toLowerCase(),
+    instructions: (match[2] || '').trim(),
+  };
+}
+
+/**
  * Determines the coding task from GitHub context
  */
 async function getTaskFromContext(
@@ -526,6 +565,91 @@ async function getTaskFromContext(
         reviewFeedback: sanitizeInput(fullFeedback, 'review-feedback').sanitized,
         existingBranch: branchValidation.sanitized, // Store sanitized branch name
       };
+    }
+  }
+
+  // Case 5: issue_comment with /agent command
+  if (eventName === 'issue_comment' && payload.comment && payload.issue) {
+    const agentCmd = parseAgentCommand(payload.comment.body || '');
+    if (agentCmd) {
+      const isPR = !!payload.issue.pull_request;
+      core.info(`/agent ${agentCmd.command} command received (isPR: ${isPR})`);
+
+      if (isPR) {
+        // /agent command on a PR - treat as PR feedback with human instructions
+        const prNumber = payload.issue.number;
+        try {
+          const { data: pr } = await octokit.rest.pulls.get({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            pull_number: prNumber,
+          });
+
+          // Get latest review feedback to combine with agent command
+          const { data: reviews } = await octokit.rest.pulls.listReviews({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            pull_number: prNumber,
+          });
+          const latestReview = reviews.reverse().find((r) => r.state === 'CHANGES_REQUESTED');
+
+          // Get inline review comments
+          let reviewComments: string[] = [];
+          if (latestReview) {
+            try {
+              const { data: comments } = await octokit.rest.pulls.listReviewComments({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                pull_number: prNumber,
+              });
+              reviewComments = comments
+                .filter((c) => c.pull_request_review_id === latestReview.id)
+                .map((c) => `**${c.path}:${c.line}** - ${c.body}`)
+                .filter((c) => c.trim().length > 0);
+            } catch (error) {
+              core.warning(`Failed to fetch review comments: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+
+          let fullFeedback = '';
+          if (latestReview?.body) {
+            fullFeedback = latestReview.body;
+          }
+          if (reviewComments.length > 0) {
+            fullFeedback += '\n\n### Inline Review Comments\n\n' + reviewComments.join('\n\n');
+          }
+          // Prepend the human's instruction
+          const humanInstruction = agentCmd.instructions
+            ? `\n\n### Human Instruction\n\n${agentCmd.instructions}`
+            : '';
+          fullFeedback = humanInstruction + (fullFeedback ? '\n\n### Review Feedback\n\n' + fullFeedback : '');
+
+          const branchValidation = validateBranchName(pr.head.ref);
+
+          return {
+            type: 'pr-feedback',
+            prNumber: pr.number,
+            content: sanitizeInput(`${pr.title}\n\n${pr.body || ''}`, 'pr-content').sanitized,
+            reviewFeedback: sanitizeInput(fullFeedback, 'review-feedback').sanitized,
+            existingBranch: branchValidation.sanitized,
+            agentCommand: agentCmd.command,
+          };
+        } catch (error) {
+          core.warning(`Failed to fetch PR #${prNumber}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      } else {
+        // /agent command on an issue - treat as issue implementation
+        return {
+          type: 'issue',
+          issueNumber: payload.issue.number,
+          content: sanitizeInput(
+            `${payload.issue.title}\n\n${payload.issue.body || ''}` +
+            (agentCmd.instructions ? `\n\n### Human Instruction\n\n${agentCmd.instructions}` : ''),
+            'issue-content'
+          ).sanitized,
+          agentCommand: agentCmd.command,
+        };
+      }
     }
   }
 
