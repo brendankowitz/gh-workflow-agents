@@ -33822,7 +33822,8 @@ function createFallbackSelfReviewResult(changes) {
 async function commitAndPush(changes, task, config) {
   core3.info("Committing and pushing changes via GitHub API...");
   core3.info(`Files to commit: ${changes.files.length}`);
-  const gitToken = config.copilotToken || config.githubToken;
+  const eventName = github.context.eventName;
+  const gitToken = eventName === "pull_request_review" ? config.copilotToken || config.githubToken : config.githubToken;
   const octokit = createOctokit(gitToken);
   const { owner, repo } = github.context.repo;
   if (config.dryRun) {
