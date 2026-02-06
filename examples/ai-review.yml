@@ -29,6 +29,7 @@ jobs:
     permissions:
       pull-requests: write
       contents: write
+      issues: write
 
     # Skip bot PRs to prevent loops (except Copilot - we want to review those!)
     # Always run for workflow_dispatch (manual trigger)
