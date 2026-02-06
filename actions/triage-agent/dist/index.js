@@ -31311,28 +31311,13 @@ async function assignToCodingAgent(octokit, ref, instructions) {
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    labels: ["copilot-assigned", "ready-for-agent", "status:in-progress"]
+    labels: ["ready-for-agent", "status:in-progress"]
   });
-  try {
-    await octokit.rest.issues.addAssignees({
-      owner: ref.owner,
-      repo: ref.repo,
-      issue_number: ref.issueNumber,
-      assignees: ["Copilot"]
-    });
-  } catch (error2) {
-    await octokit.rest.issues.createComment({
-      owner: ref.owner,
-      repo: ref.repo,
-      issue_number: ref.issueNumber,
-      body: `@copilot please implement this issue.`
-    });
-  }
   await octokit.rest.issues.createComment({
     owner: ref.owner,
     repo: ref.repo,
     issue_number: ref.issueNumber,
-    body: `## \u2728 Assigned to Copilot Coding Agent
+    body: `## \u2728 Assigned to AI Coding Agent
 
 This issue has been assessed as **concrete and actionable** and aligns with project goals.
 
@@ -31340,7 +31325,7 @@ This issue has been assessed as **concrete and actionable** and aligns with proj
 ${instructions}
 
 ---
-*Copilot will create a pull request to address this issue.*`
+*The coding agent will create a pull request to address this issue.*`
   });
 }
 async function requestClarification(octokit, ref, questions) {
@@ -33256,7 +33241,7 @@ This issue has been assessed as concrete and actionable. Please implement a solu
 4. Updates documentation if needed
         `.trim();
         await assignToCodingAgent(octokit, ref, assignmentInstructions + auditFooter);
-        core3.info(`Assigned issue #${issue.number} to Copilot coding agent`);
+        core3.info(`Assigned issue #${issue.number} to AI coding agent`);
         break;
       case "request-clarification":
         const clarificationQuestions = `
@@ -33317,7 +33302,7 @@ ${subIssue.body}
 This issue was created from research report #${issue.number}. Implement according to the details above.
             `.trim();
             await assignToCodingAgent(octokit, subRef, instructions2);
-            core3.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
+            core3.info(`Assigned sub-issue #${subIssueNumber} to AI coding agent`);
           }
           await closeIssue(octokit, ref, `Great research! I've broken this down into ${createdIssues.length} focused issues (${createdIssues.map((n) => `#${n}`).join(", ")}) and assigned them for implementation. Closing this one since all the actionable items are now being tracked separately.` + auditFooter, "completed");
           core3.info(`Closed parent issue #${issue.number} after creating sub-issues`);

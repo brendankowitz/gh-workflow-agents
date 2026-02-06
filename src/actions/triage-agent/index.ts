@@ -357,7 +357,7 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
 
     switch (validated.recommendedAction) {
       case 'assign-to-agent':
-        // Issue is actionable and aligns with vision - assign to Copilot
+        // Issue is actionable and aligns with vision - assign to coding agent
         const assignmentInstructions = `
 ## Issue Summary
 ${validated.summary}
@@ -378,7 +378,7 @@ This issue has been assessed as concrete and actionable. Please implement a solu
         `.trim();
 
         await assignToCodingAgent(octokit, ref, assignmentInstructions + auditFooter);
-        core.info(`Assigned issue #${issue.number} to Copilot coding agent`);
+        core.info(`Assigned issue #${issue.number} to AI coding agent`);
         break;
 
       case 'request-clarification':
@@ -435,7 +435,7 @@ Once I have a clearer picture, I can get this moving forward.
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map(n => `#${n}`).join(', ')}`);
 
-          // Immediately assign all sub-issues to Copilot coding agent
+          // Immediately assign all sub-issues to AI coding agent
           for (let i = 0; i < createdIssues.length; i++) {
             const subIssueNumber = createdIssues[i];
             const subIssue = subIssuesToCreate[i];
@@ -455,7 +455,7 @@ This issue was created from research report #${issue.number}. Implement accordin
             `.trim();
 
             await assignToCodingAgent(octokit, subRef, instructions);
-            core.info(`Assigned sub-issue #${subIssueNumber} to Copilot coding agent`);
+            core.info(`Assigned sub-issue #${subIssueNumber} to AI coding agent`);
           }
 
           // Close the parent issue - it's been fully processed
