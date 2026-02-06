@@ -1864,7 +1864,15 @@ async function commitAndPush(
       core.info('Retrying with copilot token (PAT)...');
       return await commitAndPushWithToken(fallbackToken, changes, task, config);
     }
-    throw error;
+    // No fallback available — return failed result
+    core.error(`Failed to commit and push changes: ${msg}`);
+    const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
+    const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
+    return {
+      branchName,
+      commitSha: '',
+      pushedSuccessfully: false,
+    };
   }
 }
 
@@ -2069,9 +2077,16 @@ async function commitAndPushWithToken(
       pushedSuccessfully: true,
     };
   } catch (error) {
-    core.error(`Failed to commit and push changes: ${error instanceof Error ? error.message : String(error)}`);
+    const msg = error instanceof Error ? error.message : String(error);
 
-    // Return failed result instead of throwing
+    // Re-throw auth/permission errors so the token fallback in commitAndPush() can retry
+    if (msg.includes('Resource not accessible')) {
+      throw error;
+    }
+
+    core.error(`Failed to commit and push changes: ${msg}`);
+
+    // Return failed result for non-auth errors
     const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
     const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
     return {

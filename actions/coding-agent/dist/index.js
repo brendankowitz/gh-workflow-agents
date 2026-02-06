@@ -33833,7 +33833,14 @@ async function commitAndPush(changes, task, config) {
       core3.info("Retrying with copilot token (PAT)...");
       return await commitAndPushWithToken(fallbackToken, changes, task, config);
     }
-    throw error3;
+    core3.error(`Failed to commit and push changes: ${msg}`);
+    const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
+    const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
+    return {
+      branchName,
+      commitSha: "",
+      pushedSuccessfully: false
+    };
   }
 }
 async function commitAndPushWithToken(token, changes, task, config) {
@@ -34002,7 +34009,11 @@ ${changes.summary}
       pushedSuccessfully: true
     };
   } catch (error3) {
-    core3.error(`Failed to commit and push changes: ${error3 instanceof Error ? error3.message : String(error3)}`);
+    const msg = error3 instanceof Error ? error3.message : String(error3);
+    if (msg.includes("Resource not accessible")) {
+      throw error3;
+    }
+    core3.error(`Failed to commit and push changes: ${msg}`);
     const issueOrPrNumber = task.issueNumber || task.prNumber || 0;
     const branchName = task.existingBranch || `agent/issue-${issueOrPrNumber}`;
     return {
