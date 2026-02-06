@@ -33822,9 +33822,22 @@ function createFallbackSelfReviewResult(changes) {
 async function commitAndPush(changes, task, config) {
   core3.info("Committing and pushing changes via GitHub API...");
   core3.info(`Files to commit: ${changes.files.length}`);
-  const eventName = github.context.eventName;
-  const gitToken = eventName === "pull_request_review" ? config.copilotToken || config.githubToken : config.githubToken;
-  const octokit = createOctokit(gitToken);
+  const primaryToken = config.githubToken;
+  const fallbackToken = config.copilotToken && config.copilotToken !== config.githubToken ? config.copilotToken : null;
+  try {
+    return await commitAndPushWithToken(primaryToken, changes, task, config);
+  } catch (error3) {
+    const msg = error3?.message || String(error3);
+    if (fallbackToken && msg.includes("Resource not accessible")) {
+      core3.warning(`Primary token (GITHUB_TOKEN) failed: ${msg}`);
+      core3.info("Retrying with copilot token (PAT)...");
+      return await commitAndPushWithToken(fallbackToken, changes, task, config);
+    }
+    throw error3;
+  }
+}
+async function commitAndPushWithToken(token, changes, task, config) {
+  const octokit = createOctokit(token);
   const { owner, repo } = github.context.repo;
   if (config.dryRun) {
     core3.info("[DRY RUN] Would commit and push changes");

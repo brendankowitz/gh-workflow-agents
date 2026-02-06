@@ -1847,16 +1847,34 @@ async function commitAndPush(
   core.info('Committing and pushing changes via GitHub API...');
   core.info(`Files to commit: ${changes.files.length}`);
 
-  // For pull_request_review events, GITHUB_TOKEN scope is narrowed and can be
-  // rejected with "Resource not accessible by integration" — use copilotToken (PAT).
-  // For all other events (issues, issue_comment, workflow_dispatch), GITHUB_TOKEN
-  // works and may have broader repo access than the PAT.
-  const eventName = github.context.eventName;
-  const gitToken =
-    eventName === 'pull_request_review'
-      ? config.copilotToken || config.githubToken
-      : config.githubToken;
-  const octokit = createOctokit(gitToken);
+  // Try githubToken first, fall back to copilotToken if it fails with 403.
+  // GITHUB_TOKEN can be rejected with "Resource not accessible by integration"
+  // in certain event contexts (pull_request_review, and sometimes workflow_dispatch).
+  const primaryToken = config.githubToken;
+  const fallbackToken = config.copilotToken && config.copilotToken !== config.githubToken
+    ? config.copilotToken
+    : null;
+
+  try {
+    return await commitAndPushWithToken(primaryToken, changes, task, config);
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (fallbackToken && msg.includes('Resource not accessible')) {
+      core.warning(`Primary token (GITHUB_TOKEN) failed: ${msg}`);
+      core.info('Retrying with copilot token (PAT)...');
+      return await commitAndPushWithToken(fallbackToken, changes, task, config);
+    }
+    throw error;
+  }
+}
+
+async function commitAndPushWithToken(
+  token: string,
+  changes: CodeChanges,
+  task: CodingTask,
+  config: CodingConfig
+): Promise<CommitResult> {
+  const octokit = createOctokit(token);
   const { owner, repo } = github.context.repo;
 
   // Check dry-run mode
