@@ -172,6 +172,19 @@ export async function removeReaction(
 }
 
 /**
+ * Formats an audit log entry as a collapsed markdown block.
+ * Can be appended to review bodies or comments to avoid a separate comment.
+ */
+export function formatAuditLog(auditEntry: AgentAuditEntry): string {
+  return (
+    `\n\n<details><summary>🤖 Agent Decision Log</summary>\n\n` +
+    '```json\n' +
+    JSON.stringify(auditEntry, null, 2) +
+    '\n```\n</details>'
+  );
+}
+
+/**
  * Posts an agent audit log as a collapsed comment
  *
  * @param octokit - Authenticated Octokit
@@ -183,13 +196,7 @@ export async function logAgentDecision(
   ref: IssueRef,
   auditEntry: AgentAuditEntry
 ): Promise<void> {
-  const comment =
-    `<details><summary>✨ Agent Decision Log</summary>\n\n` +
-    '```json\n' +
-    JSON.stringify(auditEntry, null, 2) +
-    '\n```\n</details>';
-
-  await createComment(octokit, ref, comment);
+  await createComment(octokit, ref, formatAuditLog(auditEntry));
 }
 
 /**

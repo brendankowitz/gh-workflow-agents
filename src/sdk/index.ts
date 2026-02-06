@@ -26,6 +26,7 @@ export {
   getPullRequestFiles,
   getPullRequestReviews,
   isDependabotPR,
+  formatAuditLog,
   logAgentDecision,
   searchDuplicates,
   createAuditEntry,

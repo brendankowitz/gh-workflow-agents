@@ -28,7 +28,7 @@ import {
   getPullRequestReviews,
   createPullRequestReview,
   isDependabotPR,
-  logAgentDecision,
+  formatAuditLog,
   createAuditEntry,
   createReviewSystemPrompt,
   buildReviewPrompt,
@@ -291,13 +291,30 @@ export async function run(): Promise<void> {
       // Continue with review even if duplicate check fails
     }
 
+    // Build audit log and append to review body
+    const auditEntry = createAuditEntry(
+      'review-agent',
+      `${pr.title}\n${diff.substring(0, 1000)}`,
+      [
+        ...sanitizedTitle.detectedPatterns,
+        ...sanitizedBody.detectedPatterns,
+      ],
+      [
+        `assessment:${validated.overallAssessment}`,
+        `security-issues:${validated.securityIssues.length}`,
+        `quality-issues:${validated.codeQualityIssues.length}`,
+      ],
+      DEFAULT_MODEL
+    );
+    const reviewBodyWithLog = reviewBody + formatAuditLog(auditEntry);
+
     // Post the review (using App-authenticated octokit if available)
     core.info(`Posting review with assessment: ${validated.overallAssessment}`);
     await createPullRequestReview(
       reviewOctokit,
       ref,
       event,
-      reviewBody,
+      reviewBodyWithLog,
       inlineComments
     );
 
@@ -371,29 +388,6 @@ export async function run(): Promise<void> {
         core.warning(`Failed to post @copilot mention: ${error instanceof Error ? error.message : error}`);
       }
     }
-
-    // Log audit entry
-    const auditEntry = createAuditEntry(
-      'review-agent',
-      `${pr.title}\n${diff.substring(0, 1000)}`,
-      [
-        ...sanitizedTitle.detectedPatterns,
-        ...sanitizedBody.detectedPatterns,
-      ],
-      [
-        `assessment:${validated.overallAssessment}`,
-        `security-issues:${validated.securityIssues.length}`,
-        `quality-issues:${validated.codeQualityIssues.length}`,
-      ],
-      DEFAULT_MODEL
-    );
-
-    // Log to PR as collapsed comment
-    await logAgentDecision(
-      octokit,
-      { ...ref, issueNumber: pr.number },
-      auditEntry
-    );
 
     core.info('Review complete');
   } catch (error) {
