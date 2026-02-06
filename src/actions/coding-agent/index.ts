@@ -1847,7 +1847,11 @@ async function commitAndPush(
   core.info('Committing and pushing changes via GitHub API...');
   core.info(`Files to commit: ${changes.files.length}`);
 
-  const octokit = createOctokit(config.githubToken);
+  // Prefer copilotToken (PAT) for git operations — GITHUB_TOKEN can be
+  // rejected with "Resource not accessible by integration" on feedback
+  // iterations triggered by pull_request_review from GitHub Apps.
+  const gitToken = config.copilotToken || config.githubToken;
+  const octokit = createOctokit(gitToken);
   const { owner, repo } = github.context.repo;
 
   // Check dry-run mode

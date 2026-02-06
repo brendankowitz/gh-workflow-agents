@@ -33822,7 +33822,8 @@ function createFallbackSelfReviewResult(changes) {
 async function commitAndPush(changes, task, config) {
   core3.info("Committing and pushing changes via GitHub API...");
   core3.info(`Files to commit: ${changes.files.length}`);
-  const octokit = createOctokit(config.githubToken);
+  const gitToken = config.copilotToken || config.githubToken;
+  const octokit = createOctokit(gitToken);
   const { owner, repo } = github.context.repo;
   if (config.dryRun) {
     core3.info("[DRY RUN] Would commit and push changes");
