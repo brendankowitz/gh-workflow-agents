@@ -1,3 +1,20 @@
+# AI Coding Agent Workflow
+# Autonomously implements code changes from issues
+#
+# REQUIRED SECRETS:
+# - COPILOT_GITHUB_TOKEN: GitHub PAT with Copilot access (used only for Copilot SDK)
+#
+# KNOWN LIMITATION:
+# GITHUB_TOKEN cannot push .github/workflows/ files (GitHub security restriction).
+# If the coding agent generates workflow files, they will be posted as a comment
+# on the issue for manual addition. To enable automatic workflow file pushes,
+# use a PAT with Contents + Workflows write permissions for checkout instead.
+#
+# SLASH COMMANDS (post as a comment on an issue or PR):
+#   /agent fix [instructions]       - Fix review issues on a PR
+#   /agent implement [instructions] - Implement an issue
+#   /agent update [instructions]    - Update code based on instructions
+
 name: AI Coding Agent
 
 on:
