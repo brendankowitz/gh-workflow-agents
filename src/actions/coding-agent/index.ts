@@ -40,6 +40,7 @@ import {
 interface CodingConfig {
   githubToken: string;
   copilotToken: string;
+  appToken: string;
   model: string;
   maxIterations: number;
   dryRun: boolean;
@@ -447,6 +448,7 @@ function getConfig(): CodingConfig {
   return {
     githubToken: core.getInput('github-token', { required: true }),
     copilotToken: copilotToken || '',
+    appToken: core.getInput('app-token') || '',
     model: core.getInput('model') || 'claude-sonnet-4.5',
     maxIterations: parseInt(core.getInput('max-iterations') || '5', 10),
     dryRun: core.getBooleanInput('dry-run'),
@@ -1919,34 +1921,19 @@ async function commitAndPush(
   core.info('Committing and pushing changes via GitHub API...');
   core.info(`Files to commit: ${changes.files.length}`);
 
-  // Try githubToken first, fall back to copilotToken if it fails with 403.
-  // GITHUB_TOKEN can be rejected with "Resource not accessible by integration"
-  // in certain event contexts (pull_request_review, and sometimes workflow_dispatch).
+  // Try githubToken first via API. If it fails (e.g. workflow files blocked),
+  // fall back to git CLI which tries GITHUB_TOKEN then the GitHub App token.
   const primaryToken = config.githubToken;
-  const fallbackToken = config.copilotToken && config.copilotToken !== config.githubToken
-    ? config.copilotToken
-    : null;
 
   try {
     return await commitAndPushWithToken(primaryToken, changes, task, config);
   } catch (error: any) {
     const msg = error?.message || String(error);
     if (msg.includes('Resource not accessible')) {
-      core.warning(`Primary token (GITHUB_TOKEN) failed: ${msg}`);
+      core.warning(`GITHUB_TOKEN API push failed: ${msg}`);
 
-      // Try copilotToken via API
-      if (fallbackToken) {
-        try {
-          core.info('Retrying with copilot token (PAT) via API...');
-          return await commitAndPushWithToken(fallbackToken, changes, task, config);
-        } catch (fallbackError: any) {
-          const fallbackMsg = fallbackError?.message || String(fallbackError);
-          core.warning(`Copilot token also failed: ${fallbackMsg}`);
-        }
-      }
-
-      // Last resort: use git CLI (inherits checkout token)
-      core.info('Both API tokens failed — falling back to git CLI...');
+      // Fall back to git CLI — tries GITHUB_TOKEN then App token
+      core.info('API push failed — falling back to git CLI...');
       return await commitAndPushWithGit(changes, task, config);
     }
     // Non-auth error — return failed result
@@ -1965,7 +1952,8 @@ async function commitAndPush(
  * Last-resort fallback: commit and push using git CLI.
  * Tries multiple tokens by switching the remote URL credentials.
  * GITHUB_TOKEN is tried first since the workflow grants contents:write,
- * then the copilotToken/PAT which may have broader scopes (e.g. workflows).
+ * then the GitHub App token which has workflows permission for pushing
+ * .github/workflows/ files (which GITHUB_TOKEN cannot do).
  */
 async function commitAndPushWithGit(
   changes: CodeChanges,
@@ -2035,15 +2023,15 @@ async function commitAndPushWithGit(
     const { owner, repo } = github.context.repo;
 
     // Build ordered list of tokens to try.
-    // GITHUB_TOKEN first (workflow grants contents:write, can push workflow files via git),
-    // then copilotToken/PAT (may have additional scopes like workflows).
+    // GITHUB_TOKEN first (workflow grants contents:write),
+    // then GitHub App token (has workflows permission for .github/workflows/ files).
     const tokensToTry: Array<{ label: string; token: string }> = [];
 
     if (config.githubToken) {
       tokensToTry.push({ label: 'GITHUB_TOKEN', token: config.githubToken });
     }
-    if (config.copilotToken && config.copilotToken !== config.githubToken) {
-      tokensToTry.push({ label: 'copilot PAT', token: config.copilotToken });
+    if (config.appToken && config.appToken !== config.githubToken) {
+      tokensToTry.push({ label: 'App token', token: config.appToken });
     }
 
     // Check which files we're pushing (for error diagnostics)

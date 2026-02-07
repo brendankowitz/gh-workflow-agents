@@ -32890,6 +32890,7 @@ function getConfig() {
   return {
     githubToken: core3.getInput("github-token", { required: true }),
     copilotToken: copilotToken || "",
+    appToken: core3.getInput("app-token") || "",
     model: core3.getInput("model") || "claude-sonnet-4.5",
     maxIterations: parseInt(core3.getInput("max-iterations") || "5", 10),
     dryRun: core3.getBooleanInput("dry-run")
@@ -33884,23 +33885,13 @@ async function commitAndPush(changes, task, config) {
   core3.info("Committing and pushing changes via GitHub API...");
   core3.info(`Files to commit: ${changes.files.length}`);
   const primaryToken = config.githubToken;
-  const fallbackToken = config.copilotToken && config.copilotToken !== config.githubToken ? config.copilotToken : null;
   try {
     return await commitAndPushWithToken(primaryToken, changes, task, config);
   } catch (error3) {
     const msg = error3?.message || String(error3);
     if (msg.includes("Resource not accessible")) {
-      core3.warning(`Primary token (GITHUB_TOKEN) failed: ${msg}`);
-      if (fallbackToken) {
-        try {
-          core3.info("Retrying with copilot token (PAT) via API...");
-          return await commitAndPushWithToken(fallbackToken, changes, task, config);
-        } catch (fallbackError) {
-          const fallbackMsg = fallbackError?.message || String(fallbackError);
-          core3.warning(`Copilot token also failed: ${fallbackMsg}`);
-        }
-      }
-      core3.info("Both API tokens failed \u2014 falling back to git CLI...");
+      core3.warning(`GITHUB_TOKEN API push failed: ${msg}`);
+      core3.info("API push failed \u2014 falling back to git CLI...");
       return await commitAndPushWithGit(changes, task, config);
     }
     core3.error(`Failed to commit and push changes: ${msg}`);
@@ -33962,8 +33953,8 @@ async function commitAndPushWithGit(changes, task, config) {
     if (config.githubToken) {
       tokensToTry.push({ label: "GITHUB_TOKEN", token: config.githubToken });
     }
-    if (config.copilotToken && config.copilotToken !== config.githubToken) {
-      tokensToTry.push({ label: "copilot PAT", token: config.copilotToken });
+    if (config.appToken && config.appToken !== config.githubToken) {
+      tokensToTry.push({ label: "App token", token: config.appToken });
     }
     const hasWorkflowFiles = changes.files.some((f) => f.path.startsWith(".github/workflows/") && f.operation !== "delete");
     if (hasWorkflowFiles) {

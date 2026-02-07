@@ -70,6 +70,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_AGENCY_APP_ID }}
+          private-key: ${{ secrets.GH_AGENCY_PRIVATE_KEY }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -88,6 +95,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          app-token: ${{ steps.app-token.outputs.token }}
           issue-number: ${{ github.event.inputs.issue_number || github.event.issue.number || '' }}
           pr-number: ${{ github.event.inputs.pr_number || github.event.pull_request.number || '' }}
           model: 'claude-sonnet-4.5'

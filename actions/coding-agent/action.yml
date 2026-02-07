@@ -7,8 +7,11 @@ inputs:
     description: 'GitHub token for API access'
     required: true
   copilot-token:
-    description: 'GitHub Copilot token (fine-grained PAT with Copilot access)'
+    description: 'GitHub Copilot token (used ONLY for Copilot SDK API calls)'
     required: true
+  app-token:
+    description: 'GitHub App installation token for elevated operations (workflow file pushes). Optional — falls back to github-token.'
+    required: false
   issue-number:
     description: 'Issue number to implement (for workflow_dispatch)'
     required: false
