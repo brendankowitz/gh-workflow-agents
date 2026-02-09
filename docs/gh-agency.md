@@ -21,27 +21,27 @@ GH-Agency provides a suite of specialized AI agents packaged as reusable GitHub 
 ### 1.1 The Agency Model
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    GH-Agency Orchestration Layer                     │
-│               (brendankowitz/gh-workflow-agents)                     │
-└────────────────────────────┬───────────────────────────────────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-   ┌────▼────┐        ┌──────▼──────┐      ┌──────▼──────┐
-   │ Product │        │   Review    │      │  Research   │
-   │ Manager │        │  Engineer   │      │  Engineer   │
-   │  Agent  │        │   Agent     │      │   Agent     │
-   └────┬────┘        └──────┬──────┘      └──────┬──────┘
-        │                    │                    │
-        │    ┌───────────────┼───────────────┐    │
-        │    │               │               │    │
-        ▼    ▼               ▼               ▼    ▼
-   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-   │ GitHub MCP  │    │  Copilot    │    │ Repository  │
-   │   Server    │    │    SDK      │    │  Context    │
-   │ (Issues/PRs)│    │  (LLM Core) │    │(VISION.md)  │
-   └─────────────┘    └─────────────┘    └─────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     GH-Agency Orchestration Layer                        │
+│                (brendankowitz/gh-workflow-agents)                        │
+└──────────────────────────────┬───────────────────────────────────────────┘
+                               │
+     ┌──────────────┬──────────┼──────────┬──────────────┐
+     │              │          │          │              │
+┌────▼────┐  ┌──────▼──────┐ ┌▼────────┐ ┌▼────────────┐ ┌▼──────────┐
+│ Product │  │   Coding    │ │ Review  │ │  Research   │ │ Consumer  │
+│ Manager │  │   Agent     │ │ Agent   │ │   Agent     │ │  Agent    │
+│ (Triage)│  │             │ │         │ │             │ │   (QA)    │
+└────┬────┘  └──────┬──────┘ └────┬────┘ └──────┬──────┘ └───────────┘
+     │              │             │              │
+     │    ┌─────────┼─────────────┼──────────┐   │
+     │    │         │             │          │   │
+     ▼    ▼         ▼             ▼          ▼   ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ GitHub API  │  │  Copilot    │  │ Repository  │
+│ (Issues/PRs │  │    SDK      │  │  Context    │
+│  Git/Trees) │  │  (LLM Core) │  │(VISION.md)  │
+└─────────────┘  └─────────────┘  └─────────────┘
 ```
 
 ### 1.2 Repository Structure
@@ -51,28 +51,31 @@ brendankowitz/gh-workflow-agents/
 ├── actions/
 │   ├── triage-agent/
 │   │   ├── action.yml
-│   │   ├── index.js
-│   │   └── prompts/
-│   │       ├── system.md
-│   │       └── classify.md
+│   │   └── dist/index.js
+│   ├── coding-agent/
+│   │   ├── action.yml
+│   │   └── dist/index.js
 │   ├── review-agent/
 │   │   ├── action.yml
-│   │   └── index.js
+│   │   └── dist/index.js
 │   ├── research-agent/
 │   │   ├── action.yml
-│   │   └── index.js
+│   │   └── dist/index.js
 │   └── consumer-agent/
 │       ├── action.yml
-│       └── index.js
-├── shared/
-│   ├── sanitizer.js        # Input sanitization
-│   ├── output-validator.js # Output validation
-│   ├── budget.js           # Cost tracking
-│   └── circuit-breaker.js  # Loop prevention
-├── sdk/
-│   ├── copilot-client.js   # Copilot SDK wrapper
-│   ├── github-api.js       # GitHub API utilities
-│   └── context-loader.js   # Repository context loading
+│       └── dist/index.js
+├── src/
+│   ├── shared/
+│   │   ├── sanitizer.ts       # Input sanitization
+│   │   ├── output-validator.ts # Output validation
+│   │   ├── circuit-breaker.ts  # Loop prevention & bot detection
+│   │   └── github-app.ts      # GitHub App token generation
+│   ├── sdk/
+│   │   ├── copilot-client.ts  # Copilot SDK wrapper
+│   │   ├── github-api.ts      # GitHub API utilities
+│   │   └── context-loader.ts  # Repository context loading
+│   └── actions/               # Agent TypeScript source
+├── examples/                  # Example workflow files
 └── docs/
     └── gh-agency.md
 ```
@@ -109,11 +112,34 @@ status:triage → status:needs-info → status:spec-ready → status:ready-for-d
               status:blocked
 ```
 
-### 2.2 Review Engineer Agent
+### 2.2 Coding Agent
+
+**Role**: Autonomous code implementation from issues and PR review feedback.
+
+**Triggers**: `issues.labeled` (ready-for-agent), `pull_request_review.submitted` (changes_requested), `issue_comment.created` (/agent commands), `workflow_dispatch`
+
+**Capabilities**:
+- Implements features and bug fixes from triaged issues
+- Iterative code changes based on review feedback
+- Branch creation and pull request management
+- Multi-token push fallback (GITHUB_TOKEN → App token → PAT)
+- Graceful degradation: posts code as issue comments when push fails
+- Death loop prevention via comment-based failure detection
+
+**Label State Machine**:
+```
+ready-for-agent → assigned-to-agent → agent-coded → (review)
+                                           ↓ (push fail)
+                                     needs-human-review
+```
+
+**Workflow Chaining**: After successful PR creation, dispatches the review agent via `workflow_dispatch`.
+
+### 2.3 Review Engineer Agent
 
 **Role**: Gatekeeper of code quality and security.
 
-**Triggers**: `pull_request.opened`, `pull_request.synchronize`
+**Triggers**: `pull_request.opened`, `pull_request.synchronize`, `workflow_dispatch`
 
 **Capabilities**:
 - Semantic code review with inline comments
@@ -131,11 +157,11 @@ status:triage → status:needs-info → status:spec-ready → status:ready-for-d
 | External contributor | Medium-High | Full security review |
 | Copilot-generated | Medium | Lighter review (higher trust) |
 
-### 2.3 Research Engineer Agent
+### 2.4 Research Engineer Agent
 
 **Role**: Proactive environmental scanning and codebase health monitoring.
 
-**Triggers**: `schedule` (weekly cron)
+**Triggers**: `schedule` (weekly cron), `workflow_dispatch` (issue-focused from triage)
 
 **Capabilities**:
 - Dependency analysis and update impact assessment
@@ -143,10 +169,11 @@ status:triage → status:needs-info → status:spec-ready → status:ready-for-d
 - Pattern consistency auditing against `ARCHITECTURE.md`
 - External changelog and deprecation monitoring
 - Weekly "State of the Code" reports
+- Issue-focused research mode (triggered by triage agent)
 
-**Output**: Creates GitHub Issues or Wiki entries with findings.
+**Output**: Creates GitHub Issues or Wiki entries with findings. In issue-focused mode, can chain to the coding agent.
 
-### 2.4 Consumer Agent (QA)
+### 2.5 Consumer Agent (QA)
 
 **Role**: Consumer-driven contract testing in downstream repositories.
 
@@ -174,6 +201,12 @@ on:
     types: [opened, edited]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to triage'
+        required: true
+        type: number
 
 jobs:
   triage:
@@ -181,11 +214,20 @@ jobs:
     permissions:
       issues: write
       contents: read
+      actions: write
+    # Allow bot-created issues for autonomous pipelines
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.actor != 'dependabot[bot]'
     steps:
+      - uses: actions/checkout@v4
       - uses: brendankowitz/gh-workflow-agents/actions/triage-agent@<sha>
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          model: gpt-5-mini  # Cost-efficient for classification
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          model: claude-sonnet-4.5
 ```
 
 ### 3.2 Repository Context Files

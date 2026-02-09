@@ -71,6 +71,25 @@
     auto-approve-dependabot: 'true'
 ```
 
+### Coding Agent
+
+**Role**: Autonomous code implementation from issues and PR feedback.
+
+- Implements features and bug fixes from triaged issues
+- Responds to code review feedback with iterative changes
+- Creates branches and pull requests automatically
+- Supports `/agent` slash commands for on-demand coding tasks
+- Graceful degradation: posts code as comments when push fails
+
+```yaml
+- uses: brendankowitz/gh-workflow-agents/actions/coding-agent@<sha>
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+    app-token: ${{ steps.app-token.outputs.token }}
+    model: claude-sonnet-4.5
+```
+
 ### Research Engineer Agent
 
 **Role**: Proactive environmental scanning and codebase health monitoring.
@@ -79,6 +98,7 @@
 - Technical debt identification
 - Security advisory monitoring
 - Weekly "State of the Code" reports
+- Issue-focused research mode (triggered by triage agent)
 
 ```yaml
 - uses: brendankowitz/gh-workflow-agents/actions/research-agent@<sha>
@@ -127,6 +147,16 @@ on:
     types: [opened, edited]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to triage'
+        required: true
+        type: number
+
+concurrency:
+  group: ai-triage-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  cancel-in-progress: true
 
 jobs:
   triage:
@@ -134,12 +164,25 @@ jobs:
     permissions:
       issues: write
       contents: read
-    # Prevent self-triggering loops
-    if: github.actor != 'github-actions[bot]'
+      actions: write
+    # Allow bot-created issues for autonomous pipelines, but skip dependabot
+    if: |
+      github.event_name == 'workflow_dispatch' || (
+        github.actor != 'dependabot[bot]' &&
+        !contains(github.event.comment.body || '', '/stop')
+      )
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - uses: brendankowitz/gh-workflow-agents/actions/triage-agent@main
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.issue_number || '' }}
           model: claude-sonnet-4.5
 ```
 
@@ -231,21 +274,24 @@ Built-in circuit breaker prevents runaway agents:
 ```
 gh-workflow-agents/
 ├── actions/
-│   ├── triage-agent/       # Issue classification
-│   ├── review-agent/       # Code review
-│   ├── research-agent/     # Health monitoring
+│   ├── triage-agent/       # Issue classification & routing
+│   ├── coding-agent/       # Autonomous code implementation
+│   ├── review-agent/       # Code review & auto-merge
+│   ├── research-agent/     # Health monitoring & research
 │   └── consumer-agent/     # Contract testing
 ├── src/
 │   ├── shared/             # Shared utilities
 │   │   ├── sanitizer.ts    # Input sanitization
 │   │   ├── output-validator.ts
 │   │   ├── circuit-breaker.ts
+│   │   ├── github-app.ts   # GitHub App token generation
 │   │   └── types.ts
 │   ├── sdk/                # SDK wrappers
 │   │   ├── copilot-client.ts
 │   │   ├── github-api.ts
 │   │   └── context-loader.ts
 │   └── actions/            # Agent implementations
+├── examples/               # Example workflow files
 └── docs/
     └── gh-agency.md        # Full specification
 ```
@@ -273,6 +319,10 @@ npm test
 
 # Type check
 npm run typecheck
+
+# Bundle actions (REQUIRED after TypeScript changes)
+# GitHub Actions runs compiled JS from actions/*/dist/, not TypeScript
+node scripts/bundle-actions.js
 ```
 
 ### Local Testing
@@ -309,29 +359,133 @@ Agents automatically read these files to understand their mission:
 | Input | Description | Default |
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | Required |
+| `copilot-token` | GitHub PAT for Copilot SDK | Optional |
+| `issue-number` | Issue number to triage (for `workflow_dispatch`) | — |
 | `model` | AI model to use | `claude-sonnet-4.5` |
 | `dry-run` | Only output analysis | `false` |
 | `enable-duplicate-detection` | Search for duplicates | `true` |
 | `enable-auto-label` | Auto-apply labels | `true` |
+
+### Coding Agent
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `github-token` | GitHub token for API access | Required |
+| `copilot-token` | GitHub PAT for Copilot SDK API calls | Required |
+| `app-token` | GitHub App token for elevated operations (workflow file pushes) | Optional |
+| `issue-number` | Issue number to implement (for `workflow_dispatch`) | — |
+| `pr-number` | PR number for review feedback (for `workflow_dispatch`) | — |
+| `model` | AI model to use | `claude-sonnet-4.5` |
+| `max-iterations` | Maximum REPL iterations | `5` |
+| `dry-run` | Plan only without executing changes | `false` |
 
 ### Review Agent
 
 | Input | Description | Default |
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | Required |
+| `copilot-token` | GitHub PAT for Copilot SDK | Optional |
+| `pr-number` | PR number to review (for `workflow_dispatch`) | — |
 | `model` | AI model to use | `claude-sonnet-4.5` |
 | `mode` | `analyze-only` or `full` | `full` |
 | `auto-approve-dependabot` | Auto-approve Dependabot patches | `true` |
 | `security-focus` | Prioritize security analysis | `true` |
+| `auto-merge` | Auto-merge agent-coded PRs after approval | `true` |
 
 ### Research Agent
 
 | Input | Description | Default |
 |-------|-------------|---------|
 | `github-token` | GitHub token for API access | Required |
+| `copilot-token` | GitHub PAT for Copilot SDK | Optional |
 | `model` | AI model to use | `claude-sonnet-4.5` |
 | `output-type` | `issue`, `wiki`, or `artifact` | `issue` |
-| `focus-areas` | Areas to analyze | `dependencies,security,technical-debt` |
+| `focus-areas` | Areas to analyze | `dependencies,security,technical-debt,industry-research` |
+| `create-actionable-issues` | Auto-create issues for recommendations | `false` |
+| `min-priority-for-issue` | Minimum priority for auto-created issues | `high` |
+| `issue-number` | Issue number for focused research (from triage) | — |
+| `mode` | `scheduled` or `issue-focused` | `scheduled` |
+
+---
+
+## 🔗 Autonomous Pipeline
+
+When all four workflow agents are installed, they form a self-maintaining pipeline:
+
+```
+┌──────────┐     ┌─────────┐     ┌──────────┐     ┌──────────┐
+│ Research  │────>│ Triage  │────>│  Coding  │────>│  Review  │
+│  Agent   │     │  Agent  │     │  Agent   │     │  Agent   │
+└──────────┘     └─────────┘     └──────────┘     └──────────┘
+     │                │               │                 │
+     │           route-to-       assign-to-        approve &
+     │           research         agent            auto-merge
+     │                │               │                 │
+     └────────────────┘               │            ┌────┘
+                                      │            │
+                                      ▼            ▼
+                                 changes_requested ──> Coding Agent
+                                 (feedback loop)
+```
+
+**Flow**: Research finds gaps and creates issues → Triage evaluates and routes → Coding implements and creates PRs → Review approves/merges or requests changes → feedback loops back to coding.
+
+Agents chain via `workflow_dispatch` events using `actions/github-script`. Each agent's workflow includes a dispatch step to trigger the next agent in the pipeline (see [examples/](examples/)).
+
+### Label State Machine
+
+Labels coordinate agent handoffs:
+
+| Label | Meaning |
+|-------|---------|
+| `ready-for-agent` | Issue triaged and ready for coding agent |
+| `assigned-to-agent` | Coding agent is actively working |
+| `agent-coded` | PR created by coding agent, ready for review |
+| `needs-human-review` | Agent failed or needs human intervention |
+
+---
+
+## 🔑 Token Architecture
+
+Agents use up to three token types depending on the operation:
+
+| Token | Source | Used For |
+|-------|--------|----------|
+| `GITHUB_TOKEN` | Built-in | Most operations: commits, push, PR creation, issues. **Cannot** push `.github/workflows/` files. |
+| `COPILOT_GITHUB_TOKEN` | Repository secret (PAT) | Copilot SDK API calls only. Set as both `copilot-token` input and `COPILOT_GITHUB_TOKEN` env var. |
+| GitHub App token | `actions/create-github-app-token` | Elevated operations: approve PRs as a separate identity, push workflow files. Requires a GitHub App with `contents: write` and `workflows: write` permissions. |
+
+### GitHub App Setup (Optional)
+
+A GitHub App provides a separate bot identity for reviews and can push workflow files that `GITHUB_TOKEN` cannot:
+
+1. Create a GitHub App with **Contents: Write** and **Workflows: Write** permissions
+2. Install it on the target repository
+3. Add `GH_AGENCY_APP_ID` and `GH_AGENCY_PRIVATE_KEY` as repository secrets
+4. Use `actions/create-github-app-token` to generate tokens at runtime (see [examples/ai-coding.yml](examples/ai-coding.yml))
+
+### Workflow File Push Limitation
+
+`GITHUB_TOKEN` cannot push `.github/workflows/` files (GitHub security restriction). When the coding agent detects a push failure for workflow files, it:
+1. Posts the generated file contents as an issue comment for manual addition
+2. Cleans up labels (`assigned-to-agent` → `needs-human-review`)
+3. Prevents retry loops via comment-based failure detection
+
+To enable automatic workflow file pushes, provide an `app-token` from a GitHub App with `workflows: write` permission.
+
+---
+
+## 💬 Slash Commands
+
+Post these as comments on issues or PRs to trigger the coding agent:
+
+| Command | Description |
+|---------|-------------|
+| `/agent fix [instructions]` | Fix review issues on a PR |
+| `/agent implement [instructions]` | Implement an issue |
+| `/agent update [instructions]` | Update code based on instructions |
+
+Human comments on `agent-coded` PRs also trigger the coding agent automatically.
 
 ---
 
@@ -352,7 +506,8 @@ Users can halt agent operations with special commands in comments:
 | Add labels | No |
 | Post comments | No |
 | Merge Dependabot patches | No (auto-approve) |
-| Merge feature PRs | Yes (human) |
+| Merge agent-coded PRs | No (auto-merge after AI review) |
+| Merge human PRs | Yes (human or AI review) |
 | Create releases | Yes (human) |
 
 ---

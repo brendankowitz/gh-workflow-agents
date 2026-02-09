@@ -30,10 +30,11 @@ jobs:
       issues: write
       contents: read
 
-    # Always run for workflow_dispatch (manual trigger)
+    # Allow bot-created issues for autonomous pipelines, but skip dependabot.
+    # The triage agent has its own bot-actor check that exempts workflow_dispatch
+    # and issues events, so it's safe to let bot actors through at the workflow level.
     if: |
       github.event_name == 'workflow_dispatch' || (
-        github.actor != 'github-actions[bot]' &&
         github.actor != 'dependabot[bot]' &&
         !contains(github.event.comment.body || '', '/stop') &&
         !contains(github.event.comment.body || '', '/human')

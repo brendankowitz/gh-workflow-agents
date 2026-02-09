@@ -6,9 +6,12 @@
 #
 # KNOWN LIMITATION:
 # GITHUB_TOKEN cannot push .github/workflows/ files (GitHub security restriction).
-# If the coding agent generates workflow files, they will be posted as a comment
-# on the issue for manual addition. To enable automatic workflow file pushes,
-# use a PAT with Contents + Workflows write permissions for checkout instead.
+# If the coding agent generates workflow files without an app-token, they will be
+# posted as a comment on the issue for manual addition.
+#
+# RECOMMENDED: Use a GitHub App with Contents + Workflows write permissions
+# (see the 'Generate GitHub App token' step below) to enable automatic workflow
+# file pushes. Set GH_AGENCY_APP_ID and GH_AGENCY_PRIVATE_KEY as repo secrets.
 #
 # SLASH COMMANDS (post as a comment on an issue or PR):
 #   /agent fix [instructions]       - Fix review issues on a PR
@@ -84,8 +87,9 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: |
-          npm install -g @githubnext/github-copilot-cli
-          echo "Copilot CLI installed"
+          npm install -g @github/copilot
+          echo "GitHub Copilot CLI installed"
+          copilot --version || echo "CLI ready"
 
       - name: AI Coding Agent
         id: code
