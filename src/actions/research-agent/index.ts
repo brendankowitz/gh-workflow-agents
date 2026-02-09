@@ -28,6 +28,13 @@ import {
   hasCopilotAuth,
   type IssueRef,
 } from '../../sdk/index.js';
+import { scanDependencies } from './dependency-scanner.js';
+import { scanCodebaseForDebt } from './codebase-scanner.js';
+import {
+  extractProjectContext,
+  generateIndustryInsights as generateIndustryInsightsModule,
+} from './industry-insights.js';
+import { reviewExistingIssues } from './issue-reviewer.js';
 
 /** Research agent configuration */
 interface ResearchConfig {
@@ -43,6 +50,10 @@ interface ResearchConfig {
   issueNumber?: number;
   /** Research mode: 'scheduled' (weekly report) or 'issue-focused' (targeted analysis) */
   mode: 'scheduled' | 'issue-focused';
+  /** Days without activity before issue is considered stale */
+  staleDaysThreshold: number;
+  /** Maximum source files to scan for technical debt (0 = unlimited) */
+  maxScanFiles: number;
 }
 
 /** Actionable recommendation extracted from research */
@@ -125,6 +136,8 @@ export async function run(): Promise<void> {
           `security-advisories:${report.securityAdvisories.length}`,
           `dependency-updates:${report.dependencyUpdates.length}`,
           `technical-debt:${report.technicalDebt.length}`,
+          `industry-insights:${report.industryInsights.length}`,
+          `issues-reviewed:${report.issueReview?.totalReviewed ?? 0}`,
           `actionable-issues-created:${createdIssues.length}`,
         ],
         DEFAULT_MODEL
@@ -157,7 +170,7 @@ function getConfig(): ResearchConfig {
   const focusAreasInput = core.getInput('focus-areas');
   const focusAreas = focusAreasInput
     ? focusAreasInput.split(',').map((s) => s.trim())
-    : ['dependencies', 'security', 'technical-debt', 'industry-research'];
+    : ['dependencies', 'security', 'technical-debt', 'industry-research', 'issue-review'];
 
   const minPriority = core.getInput('min-priority-for-issue') || 'high';
   const validPriorities = ['low', 'medium', 'high', 'critical'];
@@ -177,6 +190,8 @@ function getConfig(): ResearchConfig {
       : 'high',
     issueNumber: issueNumber && !isNaN(issueNumber) ? issueNumber : undefined,
     mode,
+    staleDaysThreshold: parseInt(core.getInput('stale-days-threshold') || '30', 10) || 30,
+    maxScanFiles: parseInt(core.getInput('max-scan-files') || '500', 10),
   };
 }
 
@@ -202,9 +217,12 @@ async function analyzeRepository(
 
   // Check for dependency updates
   if (config.focusAreas.includes('dependencies')) {
-    core.info('Checking dependencies...');
-    // In production, this would analyze package files and check for updates
-    // For now, we return an empty list
+    const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+    const depResult = await scanDependencies(workspace, repoContext, config.model);
+    report.dependencyUpdates = depResult.findings;
+    if (depResult.totalDependencies > 0) {
+      report.recommendations.push(depResult.summary);
+    }
   }
 
   // Check for security advisories
@@ -234,18 +252,61 @@ async function analyzeRepository(
     }
   }
 
+  // Technical debt scan
+  if (config.focusAreas.includes('technical-debt')) {
+    const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+    const debtResult = await scanCodebaseForDebt(workspace, repoContext, config.model, config.maxScanFiles);
+    report.technicalDebt = debtResult.items;
+    if (debtResult.items.length > 0) {
+      report.recommendations.push(debtResult.summary);
+    }
+  }
+
   // Industry research and feature suggestions
   if (config.focusAreas.includes('industry-research')) {
     core.info('Analyzing industry trends and similar projects...');
-    const { featureSuggestions, industryInsights } = await analyzeIndustryTrends(
-      octokit,
-      owner,
-      repo,
-      repoContext,
-      config
+    const repoTopics = await getRepositoryTopics(octokit, owner, repo);
+    const repoDescription = await getRepositoryDescription(octokit, owner, repo);
+
+    // Extract project context from VISION.md/README.md (replaces topic-gated logic)
+    const projectContext = await extractProjectContext(repoContext, repoDescription, repoTopics, config.model);
+
+    // Search for similar repos (still uses topics when available)
+    if (repoTopics.length > 0) {
+      core.info(`Searching for similar projects with topics: ${repoTopics.join(', ')}`);
+      const similarRepos = await searchSimilarRepositories(octokit, repoTopics, `${owner}/${repo}`);
+      for (const similarRepo of similarRepos.slice(0, 5)) {
+        const features = await analyzeRepositoryFeatures(octokit, similarRepo);
+        for (const feature of features) {
+          const alignment = checkVisionAlignment(feature, repoContext.vision || '');
+          if (alignment.aligns) {
+            report.featureSuggestions.push({
+              title: feature.title,
+              description: feature.description,
+              rationale: `Found in ${similarRepo.fullName} (${similarRepo.stars} stars). ${feature.rationale}`,
+              alignsWithVision: true,
+              visionAlignment: alignment.reason,
+              similarProjects: [similarRepo.fullName],
+              estimatedEffort: feature.effort,
+              priority: determinePriority(feature, similarRepo.stars, alignment),
+              category: feature.category,
+            });
+          }
+        }
+      }
+      report.featureSuggestions = consolidateFeatureSuggestions(report.featureSuggestions);
+    }
+
+    // Generate industry insights using project context (works even without topics)
+    report.industryInsights = await generateIndustryInsightsModule(projectContext, repoContext, config.model);
+  }
+
+  // Issue review
+  if (config.focusAreas.includes('issue-review')) {
+    const issueReview = await reviewExistingIssues(
+      octokit, owner, repo, repoContext, config.model, config.staleDaysThreshold
     );
-    report.featureSuggestions = featureSuggestions;
-    report.industryInsights = industryInsights;
+    report.issueReview = issueReview;
   }
 
   // Generate recommendations
@@ -253,6 +314,15 @@ async function analyzeRepository(
     report.recommendations.push(
       `Address ${report.securityAdvisories.length} open security advisories`
     );
+  }
+
+  if (report.technicalDebt.length > 0) {
+    const highDebt = report.technicalDebt.filter(d => d.priority === 'high');
+    if (highDebt.length > 0) {
+      report.recommendations.push(
+        `Address ${highDebt.length} high-priority technical debt items`
+      );
+    }
   }
 
   if (report.featureSuggestions.length > 0) {
@@ -273,71 +343,20 @@ async function analyzeRepository(
     }
   }
 
-  return report;
-}
-
-/**
- * Analyzes industry trends and similar projects to suggest features
- *
- * This function searches for similar repositories, analyzes their features,
- * and suggests improvements that align with the project's vision.
- */
-async function analyzeIndustryTrends(
-  octokit: ReturnType<typeof createOctokit>,
-  owner: string,
-  repo: string,
-  repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>,
-  config: ResearchConfig
-): Promise<{ featureSuggestions: FeatureSuggestion[]; industryInsights: IndustryInsight[] }> {
-  const featureSuggestions: FeatureSuggestion[] = [];
-  const industryInsights: IndustryInsight[] = [];
-
-  // Extract key topics from the repository for searching similar projects
-  const repoTopics = await getRepositoryTopics(octokit, owner, repo);
-  const repoDescription = await getRepositoryDescription(octokit, owner, repo);
-
-  // Search for similar repositories based on topics
-  if (repoTopics.length > 0) {
-    core.info(`Searching for similar projects with topics: ${repoTopics.join(', ')}`);
-    const similarRepos = await searchSimilarRepositories(octokit, repoTopics, `${owner}/${repo}`);
-
-    // Analyze features from similar repositories
-    for (const similarRepo of similarRepos.slice(0, 5)) {
-      const features = await analyzeRepositoryFeatures(octokit, similarRepo);
-
-      for (const feature of features) {
-        // Check if feature aligns with project vision
-        const alignment = checkVisionAlignment(feature, repoContext.vision || '');
-
-        if (alignment.aligns) {
-          featureSuggestions.push({
-            title: feature.title,
-            description: feature.description,
-            rationale: `Found in ${similarRepo.fullName} (${similarRepo.stars} stars). ${feature.rationale}`,
-            alignsWithVision: true,
-            visionAlignment: alignment.reason,
-            similarProjects: [similarRepo.fullName],
-            estimatedEffort: feature.effort,
-            priority: determinePriority(feature, similarRepo.stars, alignment),
-            category: feature.category,
-          });
-        }
-      }
+  if (report.issueReview) {
+    const ir = report.issueReview;
+    if (ir.staleIssues.length > 0) {
+      report.recommendations.push(`Triage ${ir.staleIssues.length} stale issues`);
     }
-
-    // Consolidate similar suggestions
-    const consolidatedSuggestions = consolidateFeatureSuggestions(featureSuggestions);
-    featureSuggestions.length = 0;
-    featureSuggestions.push(...consolidatedSuggestions);
+    if (ir.closeCandidates.length > 0) {
+      report.recommendations.push(`Consider closing ${ir.closeCandidates.length} stale issues with close-indicating labels`);
+    }
+    if (ir.duplicateCandidates.length > 0) {
+      report.recommendations.push(`Review ${ir.duplicateCandidates.length} potential duplicate issue pair(s)`);
+    }
   }
 
-  // Generate industry insights based on repository topics
-  if (repoDescription || repoTopics.length > 0) {
-    const insights = generateIndustryInsights(repoTopics, repoDescription, repoContext, config.model);
-    industryInsights.push(...insights);
-  }
-
-  return { featureSuggestions, industryInsights };
+  return report;
 }
 
 /**
@@ -583,71 +602,6 @@ function consolidateFeatureSuggestions(suggestions: FeatureSuggestion[]): Featur
 }
 
 /**
- * Generates industry insights based on repository topics
- * Uses heuristic-based fallback insights instead of Copilot SDK
- * to avoid stream stability issues in CI environments
- */
-function generateIndustryInsights(
-  topics: string[],
-  _description: string,
-  _repoContext: Awaited<ReturnType<typeof loadRepositoryContext>>,
-  _model: string
-): IndustryInsight[] {
-  core.info('Generating industry insights based on repository topics...');
-  return generateFallbackInsights(topics);
-}
-
-/**
- * Fallback industry insights when Copilot SDK is unavailable
- */
-function generateFallbackInsights(topics: string[]): IndustryInsight[] {
-  const insights: IndustryInsight[] = [];
-
-  const topicInsights: Record<string, IndustryInsight> = {
-    'ai': {
-      topic: 'AI/ML Integration',
-      summary: 'AI-powered features are becoming standard in developer tools',
-      relevance: 'Consider adding AI-assisted features to enhance user productivity',
-      sources: ['Industry trends in developer tooling'],
-      actionable: true,
-    },
-    'automation': {
-      topic: 'Automation Trends',
-      summary: 'Workflow automation continues to grow in importance',
-      relevance: 'Expanding automation capabilities aligns with industry direction',
-      sources: ['DevOps automation trends'],
-      actionable: true,
-    },
-    'security': {
-      topic: 'Security-First Development',
-      summary: 'Supply chain security is a top priority for organizations',
-      relevance: 'Security features provide significant competitive advantage',
-      sources: ['OWASP, industry security reports'],
-      actionable: true,
-    },
-    'typescript': {
-      topic: 'TypeScript Adoption',
-      summary: 'TypeScript continues to dominate for new JavaScript projects',
-      relevance: 'Strong typing improves maintainability and developer experience',
-      sources: ['State of JS surveys'],
-      actionable: false,
-    },
-  };
-
-  for (const topic of topics) {
-    const lowerTopic = topic.toLowerCase();
-    for (const [key, insight] of Object.entries(topicInsights)) {
-      if (lowerTopic.includes(key)) {
-        insights.push(insight);
-        break;
-      }
-    }
-  }
-
-  return insights.slice(0, 5);
-}
-
-/**
  * Creates a GitHub issue with the health report
  */
 async function createHealthReportIssue(
@@ -784,6 +738,53 @@ function buildReportBody(report: ResearchReport): string {
       sections.push(`\n**Relevance:** ${insight.relevance}`);
       if (insight.sources.length > 0) {
         sections.push(`\n*Sources: ${insight.sources.join(', ')}*`);
+      }
+      sections.push('');
+    }
+  }
+
+  // Issue review section
+  if (report.issueReview) {
+    sections.push('\n## 📝 Issue Review\n');
+    const ir = report.issueReview;
+    sections.push(`*${ir.summary}*\n`);
+
+    if (ir.staleIssues.length > 0) {
+      sections.push(`### Stale Issues (${ir.staleIssues.length})\n`);
+      for (const issue of ir.staleIssues.slice(0, 10)) {
+        sections.push(
+          `- #${issue.number}: ${issue.title} — *${issue.daysSinceActivity} days inactive*`
+        );
+      }
+      if (ir.staleIssues.length > 10) {
+        sections.push(`- *...and ${ir.staleIssues.length - 10} more*`);
+      }
+      sections.push('');
+    }
+
+    if (ir.duplicateCandidates.length > 0) {
+      sections.push(`### Potential Duplicates (${ir.duplicateCandidates.length} pairs)\n`);
+      for (const dup of ir.duplicateCandidates.slice(0, 5)) {
+        const issueRefs = dup.issues.map((i) => `#${i.number}`).join(' & ');
+        sections.push(`- ${issueRefs} (${Math.round(dup.similarity * 100)}% overlap)`);
+      }
+      sections.push('');
+    }
+
+    if (ir.closeCandidates.length > 0) {
+      sections.push(`### Close Candidates (${ir.closeCandidates.length})\n`);
+      for (const c of ir.closeCandidates.slice(0, 5)) {
+        sections.push(`- #${c.number}: ${c.title} — ${c.reason}`);
+      }
+      sections.push('');
+    }
+
+    if (ir.prioritySuggestions.length > 0) {
+      sections.push(`### Priority Suggestions (${ir.prioritySuggestions.length})\n`);
+      for (const ps of ir.prioritySuggestions.slice(0, 5)) {
+        sections.push(
+          `- #${ps.number}: ${ps.title} — ${ps.currentPriority || 'none'} → **${ps.suggestedPriority}** (${ps.reason})`
+        );
       }
       sections.push('');
     }
@@ -973,6 +974,28 @@ ${insight.sources.map((s) => `- ${s}`).join('\n')}
         category: 'feature',
         labels: ['enhancement', 'industry-trend'],
         alignsWithVision: aligns,
+      });
+    }
+  }
+
+  // Convert issue review findings to recommendations
+  if (report.issueReview) {
+    const ir = report.issueReview;
+    if (ir.closeCandidates.length > 0) {
+      recommendations.push({
+        title: `Issue Cleanup: ${ir.closeCandidates.length} issues ready to close`,
+        description: `## Issue Cleanup
+
+The following issues appear ready to close based on staleness and labels:
+
+${ir.closeCandidates.slice(0, 10).map((c) => `- #${c.number}: ${c.title} (${c.reason})`).join('\n')}
+
+---
+*Created by Research Agent*`,
+        priority: 'low',
+        category: 'infrastructure',
+        labels: ['stale'],
+        alignsWithVision: true,
       });
     }
   }

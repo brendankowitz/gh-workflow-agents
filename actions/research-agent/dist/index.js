@@ -183,7 +183,7 @@ var require_file_command = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.prepareKeyValueMessage = exports.issueFileCommand = void 0;
     var crypto = __importStar(__require("crypto"));
-    var fs = __importStar(__require("fs"));
+    var fs3 = __importStar(__require("fs"));
     var os = __importStar(__require("os"));
     var utils_1 = require_utils();
     function issueFileCommand(command, message) {
@@ -191,10 +191,10 @@ var require_file_command = __commonJS({
       if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
       }
-      if (!fs.existsSync(filePath)) {
+      if (!fs3.existsSync(filePath)) {
         throw new Error(`Missing file at path: ${filePath}`);
       }
-      fs.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os.EOL}`, {
+      fs3.appendFileSync(filePath, `${(0, utils_1.toCommandValue)(message)}${os.EOL}`, {
         encoding: "utf8"
       });
     }
@@ -997,14 +997,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol}//${url.hostname}:${port}`;
-        let path = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path3 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin.endsWith("/")) {
           origin = origin.substring(0, origin.length - 1);
         }
-        if (path && !path.startsWith("/")) {
-          path = `/${path}`;
+        if (path3 && !path3.startsWith("/")) {
+          path3 = `/${path3}`;
         }
-        url = new URL(origin + path);
+        url = new URL(origin + path3);
       }
       return url;
     }
@@ -2618,20 +2618,20 @@ var require_parseParams = __commonJS({
 var require_basename = __commonJS({
   "node_modules/@fastify/busboy/lib/utils/basename.js"(exports, module) {
     "use strict";
-    module.exports = function basename(path) {
-      if (typeof path !== "string") {
+    module.exports = function basename(path3) {
+      if (typeof path3 !== "string") {
         return "";
       }
-      for (var i = path.length - 1; i >= 0; --i) {
-        switch (path.charCodeAt(i)) {
+      for (var i = path3.length - 1; i >= 0; --i) {
+        switch (path3.charCodeAt(i)) {
           case 47:
           // '/'
           case 92:
-            path = path.slice(i + 1);
-            return path === ".." || path === "." ? "" : path;
+            path3 = path3.slice(i + 1);
+            return path3 === ".." || path3 === "." ? "" : path3;
         }
       }
-      return path === ".." || path === "." ? "" : path;
+      return path3 === ".." || path3 === "." ? "" : path3;
     };
   }
 });
@@ -5661,7 +5661,7 @@ var require_request = __commonJS({
     }
     var Request = class _Request {
       constructor(origin, {
-        path,
+        path: path3,
         method,
         body,
         headers,
@@ -5675,11 +5675,11 @@ var require_request = __commonJS({
         throwOnError,
         expectContinue
       }, handler2) {
-        if (typeof path !== "string") {
+        if (typeof path3 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path[0] !== "/" && !(path.startsWith("http://") || path.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.exec(path) !== null) {
+        } else if (invalidPathRegex.exec(path3) !== null) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -5742,7 +5742,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? util.buildURL(path, query) : path;
+        this.path = query ? util.buildURL(path3, query) : path3;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6750,9 +6750,9 @@ var require_RedirectHandler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path = search ? `${pathname}${search}` : pathname;
+        const path3 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path;
+        this.opts.path = path3;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7992,7 +7992,7 @@ var require_client = __commonJS({
         writeH2(client, client[kHTTP2Session], request2);
         return;
       }
-      const { body, method, path, host, upgrade, headers, blocking, reset } = request2;
+      const { body, method, path: path3, host, upgrade, headers, blocking, reset } = request2;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
         body.read(0);
@@ -8042,7 +8042,7 @@ var require_client = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path} HTTP/1.1\r
+      let header = `${method} ${path3} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -8105,7 +8105,7 @@ upgrade: ${upgrade}\r
       return true;
     }
     function writeH2(client, session, request2) {
-      const { body, method, path, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
+      const { body, method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
       let headers;
       if (typeof reqHeaders === "string") headers = Request[kHTTP2CopyHeaders](reqHeaders.trim());
       else headers = reqHeaders;
@@ -8148,7 +8148,7 @@ upgrade: ${upgrade}\r
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path;
+      headers[HTTP2_HEADER_PATH] = path3;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -10388,20 +10388,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path) {
-      if (typeof path !== "string") {
-        return path;
+    function safeUrl(path3) {
+      if (typeof path3 !== "string") {
+        return path3;
       }
-      const pathSegments = path.split("?");
+      const pathSegments = path3.split("?");
       if (pathSegments.length !== 2) {
-        return path;
+        return path3;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path);
+    function matchKey(mockDispatch2, { path: path3, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path3);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10419,7 +10419,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path }) => matchValue(safeUrl(path), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10456,9 +10456,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path, method, body, headers, query } = opts;
+      const { path: path3, method, body, headers, query } = opts;
       return {
-        path,
+        path: path3,
         method,
         body,
         headers,
@@ -10907,10 +10907,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path,
+            Path: path3,
             "Status code": statusCode,
             Persistent: persist ? "\u2705" : "\u274C",
             Invocations: timesInvoked,
@@ -15530,8 +15530,8 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path) {
-      for (const char of path) {
+    function validateCookiePath(path3) {
+      for (const char of path3) {
         const code = char.charCodeAt(0);
         if (code < 33 || char === ";") {
           throw new Error("Invalid cookie path");
@@ -17211,11 +17211,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path = opts.path;
+          let path3 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path = `/${path}`;
+            path3 = `/${path3}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path);
+          url = new URL(util.parseOrigin(url).origin + path3);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -17587,12 +17587,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info4 = this._prepareRequest(verb, parsedUrl, headers);
+          let info8 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info4, data);
+            response = yield this.requestRaw(info8, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17602,7 +17602,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info4, data);
+                return authenticationHandler.handleAuthentication(this, info8, data);
               } else {
                 return response;
               }
@@ -17625,8 +17625,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info4 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info4, data);
+              info8 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info8, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17655,7 +17655,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info4, data) {
+      requestRaw(info8, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17667,7 +17667,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info4, data, callbackForResult);
+            this.requestRawWithCallback(info8, data, callbackForResult);
           });
         });
       }
@@ -17677,12 +17677,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info4, data, onResult) {
+      requestRawWithCallback(info8, data, onResult) {
         if (typeof data === "string") {
-          if (!info4.options.headers) {
-            info4.options.headers = {};
+          if (!info8.options.headers) {
+            info8.options.headers = {};
           }
-          info4.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info8.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17691,7 +17691,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info4.httpModule.request(info4.options, (msg) => {
+        const req = info8.httpModule.request(info8.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17703,7 +17703,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info4.options.path}`));
+          handleResult(new Error(`Request timeout: ${info8.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17739,27 +17739,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info4 = {};
-        info4.parsedUrl = requestUrl;
-        const usingSsl = info4.parsedUrl.protocol === "https:";
-        info4.httpModule = usingSsl ? https : http;
+        const info8 = {};
+        info8.parsedUrl = requestUrl;
+        const usingSsl = info8.parsedUrl.protocol === "https:";
+        info8.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info4.options = {};
-        info4.options.host = info4.parsedUrl.hostname;
-        info4.options.port = info4.parsedUrl.port ? parseInt(info4.parsedUrl.port) : defaultPort;
-        info4.options.path = (info4.parsedUrl.pathname || "") + (info4.parsedUrl.search || "");
-        info4.options.method = method;
-        info4.options.headers = this._mergeHeaders(headers);
+        info8.options = {};
+        info8.options.host = info8.parsedUrl.hostname;
+        info8.options.port = info8.parsedUrl.port ? parseInt(info8.parsedUrl.port) : defaultPort;
+        info8.options.path = (info8.parsedUrl.pathname || "") + (info8.parsedUrl.search || "");
+        info8.options.method = method;
+        info8.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info4.options.headers["user-agent"] = this.userAgent;
+          info8.options.headers["user-agent"] = this.userAgent;
         }
-        info4.options.agent = this._getAgent(info4.parsedUrl);
+        info8.options.agent = this._getAgent(info8.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info4.options);
+            handler2.prepareRequest(info8.options);
           }
         }
-        return info4;
+        return info8;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -18438,7 +18438,7 @@ var require_path_utils = __commonJS({
     };
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.toPlatformPath = exports.toWin32Path = exports.toPosixPath = void 0;
-    var path = __importStar(__require("path"));
+    var path3 = __importStar(__require("path"));
     function toPosixPath(pth) {
       return pth.replace(/[\\]/g, "/");
     }
@@ -18448,7 +18448,7 @@ var require_path_utils = __commonJS({
     }
     exports.toWin32Path = toWin32Path;
     function toPlatformPath(pth) {
-      return pth.replace(/[/\\]/g, path.sep);
+      return pth.replace(/[/\\]/g, path3.sep);
     }
     exports.toPlatformPath = toPlatformPath;
   }
@@ -18511,12 +18511,12 @@ var require_io_util = __commonJS({
     var _a;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getCmdPath = exports.tryGetExecutablePath = exports.isRooted = exports.isDirectory = exports.exists = exports.READONLY = exports.UV_FS_O_EXLOCK = exports.IS_WINDOWS = exports.unlink = exports.symlink = exports.stat = exports.rmdir = exports.rm = exports.rename = exports.readlink = exports.readdir = exports.open = exports.mkdir = exports.lstat = exports.copyFile = exports.chmod = void 0;
-    var fs = __importStar(__require("fs"));
-    var path = __importStar(__require("path"));
-    _a = fs.promises, exports.chmod = _a.chmod, exports.copyFile = _a.copyFile, exports.lstat = _a.lstat, exports.mkdir = _a.mkdir, exports.open = _a.open, exports.readdir = _a.readdir, exports.readlink = _a.readlink, exports.rename = _a.rename, exports.rm = _a.rm, exports.rmdir = _a.rmdir, exports.stat = _a.stat, exports.symlink = _a.symlink, exports.unlink = _a.unlink;
+    var fs3 = __importStar(__require("fs"));
+    var path3 = __importStar(__require("path"));
+    _a = fs3.promises, exports.chmod = _a.chmod, exports.copyFile = _a.copyFile, exports.lstat = _a.lstat, exports.mkdir = _a.mkdir, exports.open = _a.open, exports.readdir = _a.readdir, exports.readlink = _a.readlink, exports.rename = _a.rename, exports.rm = _a.rm, exports.rmdir = _a.rmdir, exports.stat = _a.stat, exports.symlink = _a.symlink, exports.unlink = _a.unlink;
     exports.IS_WINDOWS = process.platform === "win32";
     exports.UV_FS_O_EXLOCK = 268435456;
-    exports.READONLY = fs.constants.O_RDONLY;
+    exports.READONLY = fs3.constants.O_RDONLY;
     function exists(fsPath) {
       return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -18561,7 +18561,7 @@ var require_io_util = __commonJS({
         }
         if (stats && stats.isFile()) {
           if (exports.IS_WINDOWS) {
-            const upperExt = path.extname(filePath).toUpperCase();
+            const upperExt = path3.extname(filePath).toUpperCase();
             if (extensions.some((validExt) => validExt.toUpperCase() === upperExt)) {
               return filePath;
             }
@@ -18585,11 +18585,11 @@ var require_io_util = __commonJS({
           if (stats && stats.isFile()) {
             if (exports.IS_WINDOWS) {
               try {
-                const directory = path.dirname(filePath);
-                const upperName = path.basename(filePath).toUpperCase();
+                const directory = path3.dirname(filePath);
+                const upperName = path3.basename(filePath).toUpperCase();
                 for (const actualName of yield exports.readdir(directory)) {
                   if (upperName === actualName.toUpperCase()) {
-                    filePath = path.join(directory, actualName);
+                    filePath = path3.join(directory, actualName);
                     break;
                   }
                 }
@@ -18684,7 +18684,7 @@ var require_io = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.findInPath = exports.which = exports.mkdirP = exports.rmRF = exports.mv = exports.cp = void 0;
     var assert_1 = __require("assert");
-    var path = __importStar(__require("path"));
+    var path3 = __importStar(__require("path"));
     var ioUtil = __importStar(require_io_util());
     function cp(source, dest, options = {}) {
       return __awaiter(this, void 0, void 0, function* () {
@@ -18693,7 +18693,7 @@ var require_io = __commonJS({
         if (destStat && destStat.isFile() && !force) {
           return;
         }
-        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path.join(dest, path.basename(source)) : dest;
+        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path3.join(dest, path3.basename(source)) : dest;
         if (!(yield ioUtil.exists(source))) {
           throw new Error(`no such file or directory: ${source}`);
         }
@@ -18705,7 +18705,7 @@ var require_io = __commonJS({
             yield cpDirRecursive(source, newDest, 0, force);
           }
         } else {
-          if (path.relative(source, newDest) === "") {
+          if (path3.relative(source, newDest) === "") {
             throw new Error(`'${newDest}' and '${source}' are the same file`);
           }
           yield copyFile(source, newDest, force);
@@ -18718,7 +18718,7 @@ var require_io = __commonJS({
         if (yield ioUtil.exists(dest)) {
           let destExists = true;
           if (yield ioUtil.isDirectory(dest)) {
-            dest = path.join(dest, path.basename(source));
+            dest = path3.join(dest, path3.basename(source));
             destExists = yield ioUtil.exists(dest);
           }
           if (destExists) {
@@ -18729,7 +18729,7 @@ var require_io = __commonJS({
             }
           }
         }
-        yield mkdirP(path.dirname(dest));
+        yield mkdirP(path3.dirname(dest));
         yield ioUtil.rename(source, dest);
       });
     }
@@ -18792,7 +18792,7 @@ var require_io = __commonJS({
         }
         const extensions = [];
         if (ioUtil.IS_WINDOWS && process.env["PATHEXT"]) {
-          for (const extension of process.env["PATHEXT"].split(path.delimiter)) {
+          for (const extension of process.env["PATHEXT"].split(path3.delimiter)) {
             if (extension) {
               extensions.push(extension);
             }
@@ -18805,12 +18805,12 @@ var require_io = __commonJS({
           }
           return [];
         }
-        if (tool.includes(path.sep)) {
+        if (tool.includes(path3.sep)) {
           return [];
         }
         const directories = [];
         if (process.env.PATH) {
-          for (const p of process.env.PATH.split(path.delimiter)) {
+          for (const p of process.env.PATH.split(path3.delimiter)) {
             if (p) {
               directories.push(p);
             }
@@ -18818,7 +18818,7 @@ var require_io = __commonJS({
         }
         const matches = [];
         for (const directory of directories) {
-          const filePath = yield ioUtil.tryGetExecutablePath(path.join(directory, tool), extensions);
+          const filePath = yield ioUtil.tryGetExecutablePath(path3.join(directory, tool), extensions);
           if (filePath) {
             matches.push(filePath);
           }
@@ -18934,7 +18934,7 @@ var require_toolrunner = __commonJS({
     var os = __importStar(__require("os"));
     var events = __importStar(__require("events"));
     var child = __importStar(__require("child_process"));
-    var path = __importStar(__require("path"));
+    var path3 = __importStar(__require("path"));
     var io = __importStar(require_io());
     var ioUtil = __importStar(require_io_util());
     var timers_1 = __require("timers");
@@ -19149,7 +19149,7 @@ var require_toolrunner = __commonJS({
       exec() {
         return __awaiter(this, void 0, void 0, function* () {
           if (!ioUtil.isRooted(this.toolPath) && (this.toolPath.includes("/") || IS_WINDOWS && this.toolPath.includes("\\"))) {
-            this.toolPath = path.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
+            this.toolPath = path3.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
           }
           this.toolPath = yield io.which(this.toolPath, true);
           return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
@@ -19649,7 +19649,7 @@ var require_core = __commonJS({
     var file_command_1 = require_file_command();
     var utils_1 = require_utils();
     var os = __importStar(__require("os"));
-    var path = __importStar(__require("path"));
+    var path3 = __importStar(__require("path"));
     var oidc_utils_1 = require_oidc_utils();
     var ExitCode;
     (function(ExitCode2) {
@@ -19677,7 +19677,7 @@ var require_core = __commonJS({
       } else {
         (0, command_1.issueCommand)("add-path", {}, inputPath);
       }
-      process.env["PATH"] = `${inputPath}${path.delimiter}${process.env["PATH"]}`;
+      process.env["PATH"] = `${inputPath}${path3.delimiter}${process.env["PATH"]}`;
     }
     exports.addPath = addPath;
     function getInput2(name, options) {
@@ -19741,18 +19741,18 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.error = error2;
-    function warning4(message, properties = {}) {
+    function warning8(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports.warning = warning4;
+    exports.warning = warning8;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.notice = notice;
-    function info4(message) {
+    function info8(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports.info = info4;
+    exports.info = info8;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -19833,8 +19833,8 @@ var require_context = __commonJS({
           if ((0, fs_1.existsSync)(process.env.GITHUB_EVENT_PATH)) {
             this.payload = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
           } else {
-            const path = process.env.GITHUB_EVENT_PATH;
-            process.stdout.write(`GITHUB_EVENT_PATH ${path} does not exist${os_1.EOL}`);
+            const path3 = process.env.GITHUB_EVENT_PATH;
+            process.stdout.write(`GITHUB_EVENT_PATH ${path3} does not exist${os_1.EOL}`);
           }
         }
         this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -25074,8 +25074,8 @@ var require_messageReader = __commonJS({
       get onPartialMessage() {
         return this.partialMessageEmitter.event;
       }
-      firePartialMessage(info4) {
-        this.partialMessageEmitter.fire(info4);
+      firePartialMessage(info8) {
+        this.partialMessageEmitter.fire(info8);
       }
       asError(error2) {
         if (error2 instanceof Error) {
@@ -26991,7 +26991,7 @@ var require_main2 = __commonJS({
     exports.createMessageConnection = exports.createServerSocketTransport = exports.createClientSocketTransport = exports.createServerPipeTransport = exports.createClientPipeTransport = exports.generateRandomPipeName = exports.StreamMessageWriter = exports.StreamMessageReader = exports.SocketMessageWriter = exports.SocketMessageReader = exports.PortMessageWriter = exports.PortMessageReader = exports.IPCMessageWriter = exports.IPCMessageReader = void 0;
     var ril_1 = require_ril();
     ril_1.default.install();
-    var path = __require("path");
+    var path3 = __require("path");
     var os = __require("os");
     var crypto_1 = __require("crypto");
     var net_1 = __require("net");
@@ -27127,9 +27127,9 @@ var require_main2 = __commonJS({
       }
       let result;
       if (XDG_RUNTIME_DIR) {
-        result = path.join(XDG_RUNTIME_DIR, `vscode-ipc-${randomSuffix}.sock`);
+        result = path3.join(XDG_RUNTIME_DIR, `vscode-ipc-${randomSuffix}.sock`);
       } else {
-        result = path.join(os.tmpdir(), `vscode-${randomSuffix}.sock`);
+        result = path3.join(os.tmpdir(), `vscode-${randomSuffix}.sock`);
       }
       const limit = safeIpcPathLengths.get(process.platform);
       if (limit !== void 0 && result.length > limit) {
@@ -27236,7 +27236,7 @@ var require_node = __commonJS({
 });
 
 // dist/actions/research-agent/index.js
-var core3 = __toESM(require_core(), 1);
+var core7 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/types.js
@@ -27335,18 +27335,18 @@ async function loadRepositoryContext(octokit, owner, repo, options = {}) {
   logger.info(`Loaded context for ${owner}/${repo}: ${totalSize} bytes`);
   return context2;
 }
-async function loadFile(octokit, owner, repo, path, ref, logger = defaultLogger) {
+async function loadFile(octokit, owner, repo, path3, ref, logger = defaultLogger) {
   try {
     const response = await octokit.rest.repos.getContent({
       owner,
       repo,
-      path,
+      path: path3,
       ref
     });
     if ("type" in response.data && response.data.type === "file") {
       const file = response.data;
       if (file.size > MAX_FILE_SIZE) {
-        logger.warn(`File ${path} exceeds size limit (${file.size} > ${MAX_FILE_SIZE})`);
+        logger.warn(`File ${path3} exceeds size limit (${file.size} > ${MAX_FILE_SIZE})`);
         return null;
       }
       if (file.encoding === "base64" && file.content) {
@@ -27358,7 +27358,7 @@ async function loadFile(octokit, owner, repo, path, ref, logger = defaultLogger)
     if (isNotFoundError(error2)) {
       return null;
     }
-    logger.error(`Error loading file ${path}: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    logger.error(`Error loading file ${path3}: ${error2 instanceof Error ? error2.message : String(error2)}`);
     return null;
   }
 }
@@ -28345,17 +28345,17 @@ function requestLog(octokit) {
     octokit.log.debug("request", options);
     const start = Date.now();
     const requestOptions = octokit.request.endpoint.parse(options);
-    const path = requestOptions.url.replace(options.baseUrl, "");
+    const path3 = requestOptions.url.replace(options.baseUrl, "");
     return request2(options).then((response) => {
       const requestId = response.headers["x-github-request-id"];
       octokit.log.info(
-        `${requestOptions.method} ${path} - ${response.status} with id ${requestId} in ${Date.now() - start}ms`
+        `${requestOptions.method} ${path3} - ${response.status} with id ${requestId} in ${Date.now() - start}ms`
       );
       return response;
     }).catch((error2) => {
       const requestId = error2.response?.headers["x-github-request-id"] || "UNKNOWN";
       octokit.log.error(
-        `${requestOptions.method} ${path} - ${error2.status} with id ${requestId} in ${Date.now() - start}ms`
+        `${requestOptions.method} ${path3} - ${error2.status} with id ${requestId} in ${Date.now() - start}ms`
       );
       throw error2;
     });
@@ -32477,6 +32477,1097 @@ function parseAgentResponse(response) {
 // dist/sdk/github-app.js
 var core2 = __toESM(require_core(), 1);
 
+// dist/actions/research-agent/dependency-scanner.js
+var core3 = __toESM(require_core(), 1);
+import * as fs from "fs";
+import * as path from "path";
+async function scanDependencies(workspace, repoContext, model) {
+  core3.info("Scanning for dependency manifests...");
+  const dependencies = [];
+  dependencies.push(...parsePackageJson(workspace));
+  dependencies.push(...parseCsprojFiles(workspace));
+  dependencies.push(...parseRequirementsTxt(workspace));
+  dependencies.push(...parsePyprojectToml(workspace));
+  dependencies.push(...parseCargoToml(workspace));
+  dependencies.push(...parseGoMod(workspace));
+  dependencies.push(...parseGemfile(workspace));
+  const ecosystems = /* @__PURE__ */ new Map();
+  for (const dep of dependencies) {
+    ecosystems.set(dep.ecosystem, (ecosystems.get(dep.ecosystem) || 0) + 1);
+  }
+  core3.info(`Found ${dependencies.length} dependencies across ${ecosystems.size} ecosystem(s): ${[...ecosystems.entries()].map(([e, c]) => `${e}(${c})`).join(", ")}`);
+  if (dependencies.length === 0) {
+    return {
+      findings: [],
+      ecosystems,
+      totalDependencies: 0,
+      summary: "No dependency manifests found in the repository."
+    };
+  }
+  if (hasCopilotAuth() && dependencies.length > 0) {
+    try {
+      const findings = await analyzeWithCopilot(dependencies, repoContext, model);
+      if (findings.length > 0) {
+        return {
+          findings,
+          ecosystems,
+          totalDependencies: dependencies.length,
+          summary: `Analyzed ${dependencies.length} dependencies across ${ecosystems.size} ecosystem(s). Found ${findings.length} item(s) worth reviewing.`
+        };
+      }
+    } catch (error2) {
+      core3.warning(`Copilot dependency analysis failed, using summary fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+  }
+  return {
+    findings: [],
+    ecosystems,
+    totalDependencies: dependencies.length,
+    summary: `${dependencies.length} dependencies across ${ecosystems.size} ecosystem(s): ${[...ecosystems.entries()].map(([e, c]) => `${e} (${c})`).join(", ")}. AI analysis unavailable \u2014 consider reviewing manually.`
+  };
+}
+async function analyzeWithCopilot(dependencies, repoContext, model) {
+  const contextSection = formatContextForPrompt(repoContext);
+  const depList = dependencies.slice(0, 100).map((d) => `${d.name}@${d.version} (${d.ecosystem}${d.isDev ? ", dev" : ""})`).join("\n");
+  const prompt = `You are a dependency analyst reviewing a project's dependencies.
+
+## Project Context
+${contextSection}
+
+## Dependencies (${dependencies.length} total)
+${depList}
+${dependencies.length > 100 ? `
+... and ${dependencies.length - 100} more` : ""}
+
+## Task
+Identify 3-8 notable findings about these dependencies:
+- Known outdated major versions (e.g., React 17 when 18+ is current)
+- Packages commonly known to have security issues at these versions
+- Consolidation opportunities (multiple packages for the same purpose)
+- Deprecated packages that should be replaced
+
+CRITICAL: Respond with ONLY a JSON array. No explanatory text.
+
+[
+  {
+    "package": "package-name",
+    "currentVersion": "1.0.0",
+    "latestVersion": "2.0.0",
+    "updateType": "major",
+    "breakingChanges": true,
+    "changelog": "Brief note about what changed"
+  }
+]
+
+If nothing notable, return an empty array: []`;
+  const response = await sendPrompt("You are a dependency analyst. Output ONLY valid JSON.", prompt, { model });
+  if (response.content) {
+    const parsed = parseAgentResponse(response.content);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  }
+  return [];
+}
+function parsePackageJson(workspace) {
+  const deps = [];
+  const filePath = path.join(workspace, "package.json");
+  if (!fs.existsSync(filePath))
+    return deps;
+  try {
+    const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    if (content.dependencies) {
+      for (const [name, version] of Object.entries(content.dependencies)) {
+        deps.push({ name, version: String(version), ecosystem: "npm", isDev: false });
+      }
+    }
+    if (content.devDependencies) {
+      for (const [name, version] of Object.entries(content.devDependencies)) {
+        deps.push({ name, version: String(version), ecosystem: "npm", isDev: true });
+      }
+    }
+  } catch {
+    core3.info("Failed to parse package.json");
+  }
+  return deps;
+}
+function parseCsprojFiles(workspace) {
+  const deps = [];
+  const csprojPattern = /\.csproj$/;
+  const propsFile = path.join(workspace, "Directory.Build.props");
+  const filesToScan = [];
+  try {
+    const entries = fs.readdirSync(workspace, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && csprojPattern.test(entry.name)) {
+        filesToScan.push(path.join(workspace, entry.name));
+      } else if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules") {
+        try {
+          const subEntries = fs.readdirSync(path.join(workspace, entry.name));
+          for (const sub of subEntries) {
+            if (csprojPattern.test(sub)) {
+              filesToScan.push(path.join(workspace, entry.name, sub));
+            }
+          }
+        } catch {
+        }
+      }
+    }
+  } catch {
+  }
+  if (fs.existsSync(propsFile)) {
+    filesToScan.push(propsFile);
+  }
+  const packageRefRegex = /<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"/gi;
+  for (const file of filesToScan) {
+    try {
+      const content = fs.readFileSync(file, "utf-8");
+      let match;
+      while ((match = packageRefRegex.exec(content)) !== null) {
+        deps.push({ name: match[1], version: match[2], ecosystem: "nuget", isDev: false });
+      }
+      packageRefRegex.lastIndex = 0;
+    } catch {
+    }
+  }
+  return deps;
+}
+function parseRequirementsTxt(workspace) {
+  const deps = [];
+  const filePath = path.join(workspace, "requirements.txt");
+  if (!fs.existsSync(filePath))
+    return deps;
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const lines = content.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("-"))
+        continue;
+      const match = trimmed.match(/^([a-zA-Z0-9_.-]+)\s*(?:==|>=|~=|!=|<=|>|<)\s*([^\s,;]+)/);
+      if (match) {
+        deps.push({ name: match[1], version: match[2], ecosystem: "pip", isDev: false });
+      } else if (/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+        deps.push({ name: trimmed, version: "*", ecosystem: "pip", isDev: false });
+      }
+    }
+  } catch {
+    core3.info("Failed to parse requirements.txt");
+  }
+  return deps;
+}
+function parsePyprojectToml(workspace) {
+  const deps = [];
+  const filePath = path.join(workspace, "pyproject.toml");
+  if (!fs.existsSync(filePath))
+    return deps;
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const depsMatch = content.match(/\[project\]\s*[\s\S]*?dependencies\s*=\s*\[([\s\S]*?)\]/);
+    if (depsMatch?.[1]) {
+      const depLines = depsMatch[1].match(/"([^"]+)"/g) || [];
+      for (const depLine of depLines) {
+        const raw = depLine.replace(/"/g, "");
+        const match = raw.match(/^([a-zA-Z0-9_.-]+)\s*(?:([><=!~]+)\s*(.+))?/);
+        if (match) {
+          deps.push({
+            name: match[1],
+            version: match[3] || "*",
+            ecosystem: "pip",
+            isDev: false
+          });
+        }
+      }
+    }
+  } catch {
+    core3.info("Failed to parse pyproject.toml");
+  }
+  return deps;
+}
+function parseCargoToml(workspace) {
+  const deps = [];
+  const filePath = path.join(workspace, "Cargo.toml");
+  if (!fs.existsSync(filePath))
+    return deps;
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const depsSection = content.match(/\[dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
+    if (depsSection?.[1]) {
+      const lines = depsSection[1].split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#"))
+          continue;
+        const simpleMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*"([^"]+)"/);
+        if (simpleMatch) {
+          deps.push({ name: simpleMatch[1], version: simpleMatch[2], ecosystem: "cargo", isDev: false });
+          continue;
+        }
+        const tableMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*\{.*version\s*=\s*"([^"]+)"/);
+        if (tableMatch) {
+          deps.push({ name: tableMatch[1], version: tableMatch[2], ecosystem: "cargo", isDev: false });
+        }
+      }
+    }
+  } catch {
+    core3.info("Failed to parse Cargo.toml");
+  }
+  return deps;
+}
+function parseGoMod(workspace) {
+  const deps = [];
+  const filePath = path.join(workspace, "go.mod");
+  if (!fs.existsSync(filePath))
+    return deps;
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const requireBlock = content.match(/require\s*\(([\s\S]*?)\)/);
+    if (requireBlock?.[1]) {
+      const lines = requireBlock[1].split("\n");
+      for (const line of lines) {
+        const match = line.trim().match(/^(\S+)\s+(v[\S]+)/);
+        if (match) {
+          deps.push({ name: match[1], version: match[2], ecosystem: "go", isDev: false });
+        }
+      }
+    }
+    const singleRequires = content.matchAll(/^require\s+(\S+)\s+(v[\S]+)/gm);
+    for (const match of singleRequires) {
+      deps.push({ name: match[1], version: match[2], ecosystem: "go", isDev: false });
+    }
+  } catch {
+    core3.info("Failed to parse go.mod");
+  }
+  return deps;
+}
+function parseGemfile(workspace) {
+  const deps = [];
+  const filePath = path.join(workspace, "Gemfile");
+  if (!fs.existsSync(filePath))
+    return deps;
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const lines = content.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#"))
+        continue;
+      const match = trimmed.match(/gem\s+['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]+)['"])?/);
+      if (match) {
+        deps.push({
+          name: match[1],
+          version: match[2] || "*",
+          ecosystem: "ruby",
+          isDev: false
+        });
+      }
+    }
+  } catch {
+    core3.info("Failed to parse Gemfile");
+  }
+  return deps;
+}
+
+// dist/actions/research-agent/codebase-scanner.js
+var core4 = __toESM(require_core(), 1);
+import * as fs2 from "fs";
+import * as path2 from "path";
+var SKIP_DIRS = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "vendor",
+  ".next",
+  "out",
+  "coverage",
+  "__pycache__",
+  ".tox",
+  "target",
+  "bin",
+  "obj",
+  ".cache"
+]);
+var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".py",
+  ".cs",
+  ".go",
+  ".rs",
+  ".rb",
+  ".java",
+  ".kt",
+  ".swift",
+  ".c",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".vue",
+  ".svelte"
+]);
+var TODO_PATTERN = /\b(TODO|FIXME|HACK|XXX|WORKAROUND|TEMP|KLUDGE)\b/i;
+var IMPORT_PATTERN = /^(?:import\s|from\s|require\(|using\s|#include\s)/;
+async function scanCodebaseForDebt(workspace, repoContext, model, maxFiles = 500) {
+  core4.info("Scanning codebase for technical debt indicators...");
+  const findings = [];
+  let filesScanned = 0;
+  const walk = (dir) => {
+    if (maxFiles > 0 && filesScanned >= maxFiles)
+      return;
+    let entries;
+    try {
+      entries = fs2.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (maxFiles > 0 && filesScanned >= maxFiles)
+        return;
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
+          walk(path2.join(dir, entry.name));
+        }
+        continue;
+      }
+      if (!entry.isFile())
+        continue;
+      const ext = path2.extname(entry.name).toLowerCase();
+      if (!SOURCE_EXTENSIONS.has(ext))
+        continue;
+      const filePath = path2.join(dir, entry.name);
+      const relativePath = path2.relative(workspace, filePath).replace(/\\/g, "/");
+      try {
+        const content = fs2.readFileSync(filePath, "utf-8");
+        const lines = content.split("\n");
+        filesScanned++;
+        if (lines.length > 500) {
+          findings.push({
+            file: relativePath,
+            category: "complexity",
+            detail: `Large file with ${lines.length} lines \u2014 consider splitting into smaller modules`
+          });
+        }
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const match = line.match(TODO_PATTERN);
+          if (match) {
+            const tag = match[1].toUpperCase();
+            const category = tag === "HACK" || tag === "KLUDGE" || tag === "WORKAROUND" ? "code-quality" : "maintenance";
+            findings.push({
+              file: relativePath,
+              category,
+              detail: `${tag}: ${line.trim().substring(0, 120)}`,
+              line: i + 1
+            });
+          }
+        }
+        let importCount = 0;
+        for (const line of lines) {
+          if (IMPORT_PATTERN.test(line.trim())) {
+            importCount++;
+          }
+        }
+        if (importCount > 20) {
+          findings.push({
+            file: relativePath,
+            category: "architecture",
+            detail: `File has ${importCount} imports \u2014 may indicate too many responsibilities`
+          });
+        }
+      } catch {
+      }
+    }
+  };
+  walk(workspace);
+  core4.info(`Scanned ${filesScanned} source files, found ${findings.length} raw findings`);
+  if (findings.length === 0) {
+    return {
+      items: [],
+      filesScanned,
+      summary: `Scanned ${filesScanned} source files. No notable technical debt indicators found.`
+    };
+  }
+  if (hasCopilotAuth() && findings.length > 0) {
+    try {
+      const items2 = await prioritizeWithCopilot(findings, repoContext, model);
+      if (items2.length > 0) {
+        return {
+          items: items2,
+          filesScanned,
+          summary: `Scanned ${filesScanned} files. AI identified ${items2.length} prioritized technical debt items from ${findings.length} raw findings.`
+        };
+      }
+    } catch (error2) {
+      core4.warning(`Copilot debt analysis failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+  }
+  const items = heuristicToDebtItems(findings);
+  return {
+    items,
+    filesScanned,
+    summary: `Scanned ${filesScanned} files. Found ${items.length} technical debt items (heuristic analysis).`
+  };
+}
+async function prioritizeWithCopilot(findings, repoContext, model) {
+  const contextSection = formatContextForPrompt(repoContext);
+  const topFindings = findings.slice(0, 30);
+  const findingsText = topFindings.map((f) => `[${f.category}] ${f.file}${f.line ? `:${f.line}` : ""} \u2014 ${f.detail}`).join("\n");
+  const prompt = `You are a technical debt analyst reviewing codebase scan results.
+
+## Project Context
+${contextSection}
+
+## Raw Findings (${findings.length} total, showing top ${topFindings.length})
+${findingsText}
+
+## Task
+Consolidate and prioritize these findings into 5-15 actionable technical debt items.
+Group related findings, assign priorities based on project context, and estimate effort.
+
+CRITICAL: Respond with ONLY a JSON array. No explanatory text.
+
+[
+  {
+    "category": "complexity|maintenance|code-quality|architecture",
+    "description": "Actionable description of the debt",
+    "location": "file or area affected",
+    "estimatedEffort": "small|medium|large",
+    "priority": "low|medium|high"
+  }
+]`;
+  const response = await sendPrompt("You are a technical debt analyst. Output ONLY valid JSON.", prompt, { model });
+  if (response.content) {
+    const parsed = parseAgentResponse(response.content);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  }
+  return [];
+}
+function heuristicToDebtItems(findings) {
+  const grouped = /* @__PURE__ */ new Map();
+  for (const f of findings) {
+    const key = `${f.category}:${f.file}`;
+    const list = grouped.get(key) || [];
+    list.push(f);
+    grouped.set(key, list);
+  }
+  const items = [];
+  for (const [, group] of grouped) {
+    const first = group[0];
+    let priority = "low";
+    const hasHack = group.some((f) => /HACK|FIXME|KLUDGE/i.test(f.detail));
+    if (hasHack)
+      priority = "high";
+    else if (first.category === "complexity")
+      priority = "medium";
+    else if (first.category === "architecture")
+      priority = "medium";
+    const effort = first.category === "maintenance" ? "small" : first.category === "complexity" ? "large" : "medium";
+    if (group.length > 1) {
+      items.push({
+        category: first.category,
+        description: `${group.length} ${first.category} items in ${first.file} (e.g., ${first.detail.substring(0, 80)})`,
+        location: first.file,
+        estimatedEffort: effort,
+        priority
+      });
+    } else {
+      items.push({
+        category: first.category,
+        description: first.detail,
+        location: first.file + (first.line ? `:${first.line}` : ""),
+        estimatedEffort: effort,
+        priority
+      });
+    }
+  }
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  items.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  return items.slice(0, 20);
+}
+
+// dist/actions/research-agent/industry-insights.js
+var core5 = __toESM(require_core(), 1);
+async function extractProjectContext(repoContext, repoDescription, repoTopics, model) {
+  if (hasCopilotAuth() && (repoContext.vision || repoContext.readme)) {
+    try {
+      const contextSection = formatContextForPrompt(repoContext);
+      const prompt = `Analyze this project and extract structured context.
+
+## Project Information
+${contextSection}
+
+${repoDescription ? `**Repository Description:** ${repoDescription}` : ""}
+${repoTopics.length > 0 ? `**Topics:** ${repoTopics.join(", ")}` : ""}
+
+## Task
+Extract the project's domain, tech stack, goals, and keywords.
+
+CRITICAL: Respond with ONLY a JSON object. No explanatory text.
+
+{
+  "domain": "Brief domain description (e.g., 'healthcare data interoperability', 'developer tooling', 'e-commerce')",
+  "techStack": ["tech1", "tech2"],
+  "goals": ["goal1", "goal2"],
+  "keywords": ["keyword1", "keyword2", "keyword3"]
+}`;
+      const response = await sendPrompt("You are a project analyst. Output ONLY valid JSON.", prompt, { model });
+      if (response.content) {
+        const parsed = parseAgentResponse(response.content);
+        if (parsed?.domain && parsed?.keywords?.length > 0) {
+          core5.info(`AI extracted project context: domain="${parsed.domain}", ${parsed.keywords.length} keywords`);
+          return parsed;
+        }
+      }
+    } catch (error2) {
+      core5.warning(`AI context extraction failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+  }
+  return extractContextHeuristic(repoContext, repoDescription, repoTopics);
+}
+function extractContextHeuristic(repoContext, repoDescription, repoTopics) {
+  const allText = [
+    repoContext.vision || "",
+    repoContext.readme || "",
+    repoDescription
+  ].join(" ").toLowerCase();
+  const techKeywords = {
+    typescript: "TypeScript",
+    javascript: "JavaScript",
+    python: "Python",
+    rust: "Rust",
+    go: "Go",
+    java: "Java",
+    "c#": "C#",
+    ".net": ".NET",
+    dotnet: ".NET",
+    react: "React",
+    vue: "Vue",
+    angular: "Angular",
+    node: "Node.js",
+    django: "Django",
+    flask: "Flask",
+    rails: "Rails",
+    docker: "Docker",
+    kubernetes: "Kubernetes",
+    terraform: "Terraform",
+    graphql: "GraphQL",
+    "rest api": "REST API",
+    postgresql: "PostgreSQL",
+    mongodb: "MongoDB",
+    redis: "Redis",
+    aws: "AWS",
+    azure: "Azure",
+    gcp: "GCP"
+  };
+  const techStack = [];
+  for (const [keyword, display] of Object.entries(techKeywords)) {
+    if (allText.includes(keyword)) {
+      techStack.push(display);
+    }
+  }
+  const goals = [];
+  const vision = repoContext.vision || "";
+  const goalPatterns = [
+    /## (?:Goals?|Objectives?|Mission)\s*\n([\s\S]*?)(?=\n##|$)/i,
+    /## (?:Core )?Principles?\s*\n([\s\S]*?)(?=\n##|$)/i
+  ];
+  for (const pattern of goalPatterns) {
+    const match = vision.match(pattern);
+    if (match?.[1]) {
+      const bullets = match[1].match(/^[-*]\s+(.+)$/gm) || [];
+      for (const bullet of bullets.slice(0, 5)) {
+        goals.push(bullet.replace(/^[-*]\s+/, "").trim());
+      }
+    }
+  }
+  const keywords = [...repoTopics];
+  for (const tech of techStack) {
+    if (!keywords.includes(tech.toLowerCase())) {
+      keywords.push(tech.toLowerCase());
+    }
+  }
+  if (repoDescription) {
+    const words = repoDescription.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+    for (const w of words.slice(0, 5)) {
+      if (!keywords.includes(w))
+        keywords.push(w);
+    }
+  }
+  const domain = repoDescription || repoContext.name || "software project";
+  core5.info(`Heuristic context: domain="${domain}", ${techStack.length} tech, ${keywords.length} keywords`);
+  return { domain, techStack, goals, keywords };
+}
+async function generateIndustryInsights(projectContext, repoContext, model) {
+  if (hasCopilotAuth()) {
+    try {
+      const contextSection = formatContextForPrompt(repoContext);
+      const prompt = `You are an industry analyst generating insights for a software project.
+
+## Project Context
+${contextSection}
+
+## Project Profile
+- **Domain:** ${projectContext.domain}
+- **Tech Stack:** ${projectContext.techStack.join(", ") || "Not specified"}
+- **Goals:** ${projectContext.goals.join("; ") || "Not specified"}
+- **Keywords:** ${projectContext.keywords.join(", ")}
+
+## Task
+Generate 3-5 industry insights SPECIFIC to this project's domain and technology stack.
+Focus on trends, best practices, and emerging patterns relevant to this project.
+
+CRITICAL: Respond with ONLY a JSON array. No explanatory text.
+
+[
+  {
+    "topic": "Trend or insight title",
+    "summary": "2-3 sentence description of the trend",
+    "relevance": "How this specifically applies to this project",
+    "sources": ["General source reference"],
+    "actionable": true
+  }
+]`;
+      const response = await sendPrompt("You are an industry analyst. Output ONLY valid JSON.", prompt, { model });
+      if (response.content) {
+        const parsed = parseAgentResponse(response.content);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          core5.info(`AI generated ${parsed.length} industry insights`);
+          return parsed;
+        }
+      }
+    } catch (error2) {
+      core5.warning(`AI industry insights failed, using fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+  }
+  return generateFallbackInsights(projectContext.keywords, projectContext.techStack);
+}
+function generateFallbackInsights(keywords, techStack) {
+  const insights = [];
+  const allTerms = [...keywords, ...techStack.map((t) => t.toLowerCase())];
+  const topicInsights = {
+    ai: {
+      topic: "AI/ML Integration",
+      summary: "AI-powered features are becoming standard in developer tools and applications. LLM-based code generation, natural language interfaces, and intelligent automation are reshaping how software is built.",
+      relevance: "Consider adding AI-assisted features to enhance user productivity",
+      sources: ["Industry trends in AI-powered development"],
+      actionable: true
+    },
+    automation: {
+      topic: "Automation Trends",
+      summary: "Workflow automation continues to grow in importance with CI/CD, GitOps, and infrastructure-as-code patterns becoming standard practice.",
+      relevance: "Expanding automation capabilities aligns with industry direction",
+      sources: ["DevOps automation trends"],
+      actionable: true
+    },
+    security: {
+      topic: "Security-First Development",
+      summary: "Supply chain security, SBOM generation, and shift-left security testing are top priorities. SLSA framework adoption is accelerating.",
+      relevance: "Security features provide significant competitive advantage",
+      sources: ["OWASP, SLSA framework, industry security reports"],
+      actionable: true
+    },
+    typescript: {
+      topic: "TypeScript Ecosystem",
+      summary: "TypeScript continues to dominate for new JavaScript projects. Type-safe APIs, runtime validation (Zod, Valibot), and edge-first frameworks are key trends.",
+      relevance: "Strong typing improves maintainability and developer experience",
+      sources: ["State of JS surveys"],
+      actionable: false
+    },
+    javascript: {
+      topic: "JavaScript Runtime Evolution",
+      summary: "Modern runtimes (Bun, Deno) are gaining traction. ESM-first approaches, native test runners, and cross-runtime compatibility are emerging patterns.",
+      relevance: "Staying current with runtime capabilities can improve performance and DX",
+      sources: ["JavaScript ecosystem trends"],
+      actionable: true
+    },
+    python: {
+      topic: "Python Modernization",
+      summary: "Type hints, async patterns, and modern package managers (uv, rye) are reshaping Python development. FastAPI and Pydantic have become the standard for APIs.",
+      relevance: "Modern Python practices improve code quality and performance",
+      sources: ["Python developer surveys"],
+      actionable: true
+    },
+    rust: {
+      topic: "Rust Adoption in Systems",
+      summary: "Rust is increasingly adopted for performance-critical tools, CLI applications, and WebAssembly targets. Memory safety without GC overhead is the key driver.",
+      relevance: "Rust components can improve performance for critical paths",
+      sources: ["Rust ecosystem reports"],
+      actionable: true
+    },
+    go: {
+      topic: "Go for Cloud Native",
+      summary: "Go remains the dominant language for cloud-native infrastructure, CLIs, and microservices. Generics adoption and improved error handling are evolving the ecosystem.",
+      relevance: "Go is well-suited for building reliable, concurrent services",
+      sources: ["Go developer surveys"],
+      actionable: false
+    },
+    docker: {
+      topic: "Container Best Practices",
+      summary: "Multi-stage builds, distroless images, and BuildKit optimizations are now standard. Container security scanning and SBOM generation are increasingly required.",
+      relevance: "Optimized container workflows improve security and deployment speed",
+      sources: ["Container security best practices"],
+      actionable: true
+    },
+    kubernetes: {
+      topic: "Kubernetes Ecosystem",
+      summary: "Platform engineering, GitOps (ArgoCD/Flux), and service mesh simplification are key trends. Developer portals (Backstage) are gaining adoption.",
+      relevance: "Modern K8s patterns improve operational efficiency",
+      sources: ["CNCF ecosystem reports"],
+      actionable: true
+    },
+    api: {
+      topic: "API Design Evolution",
+      summary: "OpenAPI 3.1, AsyncAPI for event-driven systems, and API-first development are standard. GraphQL federation and tRPC for type-safe APIs are growing.",
+      relevance: "Strong API design improves integration and developer experience",
+      sources: ["API ecosystem trends"],
+      actionable: true
+    },
+    testing: {
+      topic: "Modern Testing Practices",
+      summary: "Component testing, visual regression, and AI-assisted test generation are emerging. Property-based testing and mutation testing provide higher confidence.",
+      relevance: "Advanced testing strategies improve reliability and reduce bugs",
+      sources: ["Testing trends in software engineering"],
+      actionable: true
+    },
+    devops: {
+      topic: "Platform Engineering",
+      summary: "Internal developer platforms (IDPs), self-service infrastructure, and golden paths are replacing traditional DevOps. Developer experience is the focus.",
+      relevance: "Platform engineering reduces friction and improves developer productivity",
+      sources: ["Platform engineering trends"],
+      actionable: true
+    },
+    cloud: {
+      topic: "Cloud-Native Patterns",
+      summary: "Serverless-first architectures, edge computing, and multi-cloud strategies continue to evolve. Cost optimization and FinOps are increasingly important.",
+      relevance: "Cloud-native patterns improve scalability and reduce operational overhead",
+      sources: ["Cloud computing trends"],
+      actionable: true
+    },
+    database: {
+      topic: "Modern Data Layer",
+      summary: "Vector databases for AI workloads, edge-local databases (SQLite-based), and serverless database offerings are key trends. Schema-as-code and migration automation are standard.",
+      relevance: "Modern data patterns improve scalability and developer experience",
+      sources: ["Database technology trends"],
+      actionable: true
+    },
+    dotnet: {
+      topic: ".NET Modernization",
+      summary: ".NET 8+ with native AOT compilation, minimal APIs, and Aspire for cloud-native development are reshaping the ecosystem. Blazor for full-stack C# is maturing.",
+      relevance: ".NET modernization improves performance and developer productivity",
+      sources: [".NET ecosystem reports"],
+      actionable: true
+    },
+    java: {
+      topic: "Java Ecosystem Evolution",
+      summary: "Virtual threads (Project Loom), GraalVM native images, and modern frameworks (Quarkus, Micronaut) are transforming Java development. Records and sealed classes improve code expressiveness.",
+      relevance: "Modern Java features improve concurrency and startup performance",
+      sources: ["Java ecosystem trends"],
+      actionable: true
+    }
+  };
+  const matched = /* @__PURE__ */ new Set();
+  for (const term of allTerms) {
+    const lower = term.toLowerCase();
+    for (const [key, insight] of Object.entries(topicInsights)) {
+      if (lower.includes(key) && !matched.has(key)) {
+        insights.push(insight);
+        matched.add(key);
+      }
+    }
+  }
+  return insights.slice(0, 5);
+}
+
+// dist/actions/research-agent/issue-reviewer.js
+var core6 = __toESM(require_core(), 1);
+async function reviewExistingIssues(octokit, owner, repo, repoContext, model, staleDaysThreshold = 30) {
+  core6.info("Reviewing existing open issues...");
+  let issues;
+  try {
+    const response = await octokit.rest.issues.listForRepo({
+      owner,
+      repo,
+      state: "open",
+      per_page: 100,
+      sort: "updated",
+      direction: "asc"
+      // Least recently updated first
+    });
+    issues = response.data.filter((i) => !i.pull_request).map((i) => ({
+      number: i.number,
+      title: i.title,
+      body: (i.body || "").substring(0, 200),
+      labels: (i.labels || []).map((l) => typeof l === "string" ? l : l.name || ""),
+      createdAt: i.created_at,
+      updatedAt: i.updated_at
+    }));
+  } catch (error2) {
+    core6.warning(`Failed to fetch issues: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    return {
+      totalReviewed: 0,
+      staleIssues: [],
+      duplicateCandidates: [],
+      closeCandidates: [],
+      prioritySuggestions: [],
+      summary: "Failed to fetch issues for review."
+    };
+  }
+  if (issues.length === 0) {
+    return {
+      totalReviewed: 0,
+      staleIssues: [],
+      duplicateCandidates: [],
+      closeCandidates: [],
+      prioritySuggestions: [],
+      summary: "No open issues to review."
+    };
+  }
+  core6.info(`Reviewing ${issues.length} open issues...`);
+  const now = Date.now();
+  const staleMs = staleDaysThreshold * 24 * 60 * 60 * 1e3;
+  const staleIssues = [];
+  for (const issue of issues) {
+    const lastActivity = new Date(issue.updatedAt).getTime();
+    const daysSinceActivity = Math.floor((now - lastActivity) / (24 * 60 * 60 * 1e3));
+    if (daysSinceActivity >= staleDaysThreshold) {
+      staleIssues.push({
+        number: issue.number,
+        title: issue.title,
+        daysSinceActivity,
+        labels: issue.labels
+      });
+    }
+  }
+  const duplicateCandidates = [];
+  const issueKeywords = issues.map((i) => ({
+    issue: i,
+    keywords: extractKeywords(i.title)
+  }));
+  for (let i = 0; i < issueKeywords.length; i++) {
+    for (let j = i + 1; j < issueKeywords.length; j++) {
+      const a = issueKeywords[i];
+      const b = issueKeywords[j];
+      if (a.keywords.length === 0 || b.keywords.length === 0)
+        continue;
+      const overlap = computeKeywordOverlap(a.keywords, b.keywords);
+      if (overlap > 0.6) {
+        const alreadyCovered = duplicateCandidates.some((dc) => dc.issues.some((x) => x.number === a.issue.number) && dc.issues.some((x) => x.number === b.issue.number));
+        if (!alreadyCovered) {
+          duplicateCandidates.push({
+            issues: [
+              { number: a.issue.number, title: a.issue.title },
+              { number: b.issue.number, title: b.issue.title }
+            ],
+            similarity: Math.round(overlap * 100) / 100
+          });
+        }
+      }
+    }
+  }
+  const closeLabels = /* @__PURE__ */ new Set(["wontfix", "duplicate", "status:needs-info", "won't fix", "invalid"]);
+  const closeCandidates = [];
+  for (const issue of staleIssues) {
+    const hasCloseLabel = issue.labels.some((l) => closeLabels.has(l.toLowerCase()));
+    if (hasCloseLabel) {
+      const matchedLabel = issue.labels.find((l) => closeLabels.has(l.toLowerCase()));
+      closeCandidates.push({
+        number: issue.number,
+        title: issue.title,
+        reason: `Stale (${issue.daysSinceActivity} days) with label "${matchedLabel}"`
+      });
+    }
+  }
+  let prioritySuggestions = [];
+  if (hasCopilotAuth() && issues.length > 0) {
+    try {
+      prioritySuggestions = await analyzeWithCopilot2(issues.slice(0, 50), repoContext, model, duplicateCandidates, staleIssues);
+    } catch (error2) {
+      core6.warning(`AI issue analysis failed: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+  }
+  const summary = buildSummary(issues.length, staleIssues.length, duplicateCandidates.length, closeCandidates.length);
+  core6.info(summary);
+  return {
+    totalReviewed: issues.length,
+    staleIssues,
+    duplicateCandidates,
+    closeCandidates,
+    prioritySuggestions,
+    summary
+  };
+}
+function extractKeywords(title) {
+  const stopWords = /* @__PURE__ */ new Set([
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "shall",
+    "should",
+    "may",
+    "might",
+    "must",
+    "can",
+    "could",
+    "to",
+    "of",
+    "in",
+    "for",
+    "on",
+    "with",
+    "at",
+    "by",
+    "from",
+    "as",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "between",
+    "and",
+    "but",
+    "or",
+    "nor",
+    "not",
+    "so",
+    "yet",
+    "both",
+    "either",
+    "neither",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "when",
+    "where",
+    "how",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "why",
+    "all",
+    "each",
+    "every",
+    "some",
+    "any",
+    "no",
+    "other",
+    "such",
+    "only",
+    "same",
+    "than",
+    "too",
+    "very",
+    "add",
+    "fix",
+    "update",
+    "implement",
+    "create",
+    "remove",
+    "delete",
+    "change",
+    "modify",
+    "use",
+    "make",
+    "get",
+    "set",
+    "new",
+    "need"
+  ]);
+  return title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").split(/\s+/).filter((w) => w.length > 2 && !stopWords.has(w));
+}
+function computeKeywordOverlap(a, b) {
+  const setA = new Set(a);
+  const setB = new Set(b);
+  let intersection = 0;
+  for (const word of setA) {
+    if (setB.has(word))
+      intersection++;
+  }
+  const minLen = Math.min(setA.size, setB.size);
+  if (minLen === 0)
+    return 0;
+  return intersection / minLen;
+}
+async function analyzeWithCopilot2(issues, repoContext, model, duplicateCandidates, staleIssues) {
+  const contextSection = formatContextForPrompt(repoContext);
+  const issueList = issues.map((i) => `#${i.number}: "${i.title}" [${i.labels.join(", ") || "no labels"}] (updated: ${i.updatedAt.split("T")[0]})`).join("\n");
+  const prompt = `You are a project manager reviewing open issues for a repository.
+
+## Project Context
+${contextSection}
+
+## Open Issues (${issues.length})
+${issueList}
+
+## Already Detected
+- ${staleIssues.length} stale issues
+- ${duplicateCandidates.length} potential duplicate pairs
+
+## Task
+Review these issues and identify priority suggestions \u2014 issues that appear mis-prioritized,
+under-labeled, or that should be escalated/de-escalated based on the project vision.
+
+CRITICAL: Respond with ONLY a JSON array. No explanatory text.
+If no suggestions, return an empty array: []
+
+[
+  {
+    "number": 123,
+    "title": "Issue title",
+    "currentPriority": "low or null if unlabeled",
+    "suggestedPriority": "high",
+    "reason": "Why this should be reprioritized"
+  }
+]`;
+  const response = await sendPrompt("You are a project manager. Output ONLY valid JSON.", prompt, { model });
+  if (response.content) {
+    const parsed = parseAgentResponse(response.content);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  }
+  return [];
+}
+function buildSummary(total, stale, duplicates, closeCandidates) {
+  const parts = [`Reviewed ${total} open issues.`];
+  if (stale > 0)
+    parts.push(`${stale} stale.`);
+  if (duplicates > 0)
+    parts.push(`${duplicates} potential duplicate pair(s).`);
+  if (closeCandidates > 0)
+    parts.push(`${closeCandidates} close candidate(s).`);
+  if (stale === 0 && duplicates === 0 && closeCandidates === 0) {
+    parts.push("No major issues found.");
+  }
+  return parts.join(" ");
+}
+
 // dist/actions/research-agent/index.js
 async function run() {
   try {
@@ -32486,29 +33577,29 @@ async function run() {
     const octokit = createOctokit(config.githubToken);
     const owner = github.context.repo.owner;
     const repo = github.context.repo.repo;
-    core3.info("Loading repository context...");
+    core7.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, owner, repo);
     if (config.mode === "issue-focused" && config.issueNumber) {
-      core3.info(`Running issue-focused research for issue #${config.issueNumber}...`);
+      core7.info(`Running issue-focused research for issue #${config.issueNumber}...`);
       await runIssueFocusedResearch(octokit, owner, repo, config, repoContext);
       return;
     }
-    core3.info("Analyzing repository health...");
+    core7.info("Analyzing repository health...");
     const report = await analyzeRepository(octokit, owner, repo, config, repoContext);
-    core3.setOutput("report", JSON.stringify(report));
-    core3.setOutput("dependency-updates", report.dependencyUpdates.length);
-    core3.setOutput("technical-debt-items", report.technicalDebt.length);
-    core3.setOutput("security-advisories", report.securityAdvisories.length);
+    core7.setOutput("report", JSON.stringify(report));
+    core7.setOutput("dependency-updates", report.dependencyUpdates.length);
+    core7.setOutput("technical-debt-items", report.technicalDebt.length);
+    core7.setOutput("security-advisories", report.securityAdvisories.length);
     let issueNumber;
     if (config.outputType === "issue") {
       issueNumber = await createHealthReportIssue(octokit, owner, repo, report);
     }
     let createdIssues = [];
     if (config.createActionableIssues) {
-      core3.info("Creating actionable issues for recommendations...");
+      core7.info("Creating actionable issues for recommendations...");
       createdIssues = await createActionableIssuesFromReport(octokit, owner, repo, report, repoContext, config);
-      core3.setOutput("issues-created", createdIssues.length);
-      core3.setOutput("issue-numbers", createdIssues.join(","));
+      core7.setOutput("issues-created", createdIssues.length);
+      core7.setOutput("issue-numbers", createdIssues.join(","));
     }
     if (issueNumber) {
       const auditEntry = createAuditEntry("research-agent", JSON.stringify(config.focusAreas), [], [
@@ -32516,41 +33607,45 @@ async function run() {
         `security-advisories:${report.securityAdvisories.length}`,
         `dependency-updates:${report.dependencyUpdates.length}`,
         `technical-debt:${report.technicalDebt.length}`,
+        `industry-insights:${report.industryInsights.length}`,
+        `issues-reviewed:${report.issueReview?.totalReviewed ?? 0}`,
         `actionable-issues-created:${createdIssues.length}`
       ], DEFAULT_MODEL);
       const ref = { owner, repo, issueNumber };
       await logAgentDecision(octokit, ref, auditEntry);
     }
-    core3.info(`Research complete. Created ${createdIssues.length} actionable issues.`);
+    core7.info(`Research complete. Created ${createdIssues.length} actionable issues.`);
   } catch (error2) {
     if (error2 instanceof Error) {
-      core3.setFailed(error2.message);
+      core7.setFailed(error2.message);
     } else {
-      core3.setFailed("An unknown error occurred");
+      core7.setFailed("An unknown error occurred");
     }
   }
 }
 function getConfig() {
-  const copilotToken = core3.getInput("copilot-token");
+  const copilotToken = core7.getInput("copilot-token");
   if (copilotToken) {
     process.env.COPILOT_GITHUB_TOKEN = copilotToken;
   }
-  const focusAreasInput = core3.getInput("focus-areas");
-  const focusAreas = focusAreasInput ? focusAreasInput.split(",").map((s) => s.trim()) : ["dependencies", "security", "technical-debt", "industry-research"];
-  const minPriority = core3.getInput("min-priority-for-issue") || "high";
+  const focusAreasInput = core7.getInput("focus-areas");
+  const focusAreas = focusAreasInput ? focusAreasInput.split(",").map((s) => s.trim()) : ["dependencies", "security", "technical-debt", "industry-research", "issue-review"];
+  const minPriority = core7.getInput("min-priority-for-issue") || "high";
   const validPriorities = ["low", "medium", "high", "critical"];
-  const issueNumberInput = core3.getInput("issue-number");
+  const issueNumberInput = core7.getInput("issue-number");
   const issueNumber = issueNumberInput ? parseInt(issueNumberInput, 10) : void 0;
-  const mode = core3.getInput("mode") || "scheduled";
+  const mode = core7.getInput("mode") || "scheduled";
   return {
-    githubToken: core3.getInput("github-token", { required: true }),
-    model: core3.getInput("model") || "claude-sonnet-4.5",
-    outputType: core3.getInput("output-type") || "issue",
+    githubToken: core7.getInput("github-token", { required: true }),
+    model: core7.getInput("model") || "claude-sonnet-4.5",
+    outputType: core7.getInput("output-type") || "issue",
     focusAreas,
-    createActionableIssues: core3.getInput("create-actionable-issues") === "true",
+    createActionableIssues: core7.getInput("create-actionable-issues") === "true",
     minPriorityForIssue: validPriorities.includes(minPriority) ? minPriority : "high",
     issueNumber: issueNumber && !isNaN(issueNumber) ? issueNumber : void 0,
-    mode
+    mode,
+    staleDaysThreshold: parseInt(core7.getInput("stale-days-threshold") || "30", 10) || 30,
+    maxScanFiles: parseInt(core7.getInput("max-scan-files") || "500", 10)
   };
 }
 async function analyzeRepository(octokit, owner, repo, config, repoContext) {
@@ -32564,10 +33659,15 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
     recommendations: []
   };
   if (config.focusAreas.includes("dependencies")) {
-    core3.info("Checking dependencies...");
+    const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+    const depResult = await scanDependencies(workspace, repoContext, config.model);
+    report.dependencyUpdates = depResult.findings;
+    if (depResult.totalDependencies > 0) {
+      report.recommendations.push(depResult.summary);
+    }
   }
   if (config.focusAreas.includes("security")) {
-    core3.info("Checking security advisories...");
+    core7.info("Checking security advisories...");
     try {
       const advisories = await octokit.rest.dependabot.listAlertsForRepo({
         owner,
@@ -32586,17 +33686,60 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
         });
       }
     } catch {
-      core3.info("Could not fetch Dependabot alerts (may require additional permissions)");
+      core7.info("Could not fetch Dependabot alerts (may require additional permissions)");
+    }
+  }
+  if (config.focusAreas.includes("technical-debt")) {
+    const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+    const debtResult = await scanCodebaseForDebt(workspace, repoContext, config.model, config.maxScanFiles);
+    report.technicalDebt = debtResult.items;
+    if (debtResult.items.length > 0) {
+      report.recommendations.push(debtResult.summary);
     }
   }
   if (config.focusAreas.includes("industry-research")) {
-    core3.info("Analyzing industry trends and similar projects...");
-    const { featureSuggestions, industryInsights } = await analyzeIndustryTrends(octokit, owner, repo, repoContext, config);
-    report.featureSuggestions = featureSuggestions;
-    report.industryInsights = industryInsights;
+    core7.info("Analyzing industry trends and similar projects...");
+    const repoTopics = await getRepositoryTopics(octokit, owner, repo);
+    const repoDescription = await getRepositoryDescription(octokit, owner, repo);
+    const projectContext = await extractProjectContext(repoContext, repoDescription, repoTopics, config.model);
+    if (repoTopics.length > 0) {
+      core7.info(`Searching for similar projects with topics: ${repoTopics.join(", ")}`);
+      const similarRepos = await searchSimilarRepositories(octokit, repoTopics, `${owner}/${repo}`);
+      for (const similarRepo of similarRepos.slice(0, 5)) {
+        const features = await analyzeRepositoryFeatures(octokit, similarRepo);
+        for (const feature of features) {
+          const alignment = checkVisionAlignment(feature, repoContext.vision || "");
+          if (alignment.aligns) {
+            report.featureSuggestions.push({
+              title: feature.title,
+              description: feature.description,
+              rationale: `Found in ${similarRepo.fullName} (${similarRepo.stars} stars). ${feature.rationale}`,
+              alignsWithVision: true,
+              visionAlignment: alignment.reason,
+              similarProjects: [similarRepo.fullName],
+              estimatedEffort: feature.effort,
+              priority: determinePriority(feature, similarRepo.stars, alignment),
+              category: feature.category
+            });
+          }
+        }
+      }
+      report.featureSuggestions = consolidateFeatureSuggestions(report.featureSuggestions);
+    }
+    report.industryInsights = await generateIndustryInsights(projectContext, repoContext, config.model);
+  }
+  if (config.focusAreas.includes("issue-review")) {
+    const issueReview = await reviewExistingIssues(octokit, owner, repo, repoContext, config.model, config.staleDaysThreshold);
+    report.issueReview = issueReview;
   }
   if (report.securityAdvisories.length > 0) {
     report.recommendations.push(`Address ${report.securityAdvisories.length} open security advisories`);
+  }
+  if (report.technicalDebt.length > 0) {
+    const highDebt = report.technicalDebt.filter((d) => d.priority === "high");
+    if (highDebt.length > 0) {
+      report.recommendations.push(`Address ${highDebt.length} high-priority technical debt items`);
+    }
   }
   if (report.featureSuggestions.length > 0) {
     const highPriority = report.featureSuggestions.filter((f) => f.priority === "high");
@@ -32610,44 +33753,19 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
       report.recommendations.push(`Review ${actionable.length} actionable industry insights`);
     }
   }
-  return report;
-}
-async function analyzeIndustryTrends(octokit, owner, repo, repoContext, config) {
-  const featureSuggestions = [];
-  const industryInsights = [];
-  const repoTopics = await getRepositoryTopics(octokit, owner, repo);
-  const repoDescription = await getRepositoryDescription(octokit, owner, repo);
-  if (repoTopics.length > 0) {
-    core3.info(`Searching for similar projects with topics: ${repoTopics.join(", ")}`);
-    const similarRepos = await searchSimilarRepositories(octokit, repoTopics, `${owner}/${repo}`);
-    for (const similarRepo of similarRepos.slice(0, 5)) {
-      const features = await analyzeRepositoryFeatures(octokit, similarRepo);
-      for (const feature of features) {
-        const alignment = checkVisionAlignment(feature, repoContext.vision || "");
-        if (alignment.aligns) {
-          featureSuggestions.push({
-            title: feature.title,
-            description: feature.description,
-            rationale: `Found in ${similarRepo.fullName} (${similarRepo.stars} stars). ${feature.rationale}`,
-            alignsWithVision: true,
-            visionAlignment: alignment.reason,
-            similarProjects: [similarRepo.fullName],
-            estimatedEffort: feature.effort,
-            priority: determinePriority(feature, similarRepo.stars, alignment),
-            category: feature.category
-          });
-        }
-      }
+  if (report.issueReview) {
+    const ir = report.issueReview;
+    if (ir.staleIssues.length > 0) {
+      report.recommendations.push(`Triage ${ir.staleIssues.length} stale issues`);
     }
-    const consolidatedSuggestions = consolidateFeatureSuggestions(featureSuggestions);
-    featureSuggestions.length = 0;
-    featureSuggestions.push(...consolidatedSuggestions);
+    if (ir.closeCandidates.length > 0) {
+      report.recommendations.push(`Consider closing ${ir.closeCandidates.length} stale issues with close-indicating labels`);
+    }
+    if (ir.duplicateCandidates.length > 0) {
+      report.recommendations.push(`Review ${ir.duplicateCandidates.length} potential duplicate issue pair(s)`);
+    }
   }
-  if (repoDescription || repoTopics.length > 0) {
-    const insights = generateIndustryInsights(repoTopics, repoDescription, repoContext, config.model);
-    industryInsights.push(...insights);
-  }
-  return { featureSuggestions, industryInsights };
+  return report;
 }
 async function getRepositoryTopics(octokit, owner, repo) {
   try {
@@ -32685,7 +33803,7 @@ async function searchSimilarRepositories(octokit, topics, excludeRepo) {
       }
     }
   } catch {
-    core3.info("Could not search for similar repositories");
+    core7.info("Could not search for similar repositories");
   }
   return results;
 }
@@ -32799,53 +33917,6 @@ function consolidateFeatureSuggestions(suggestions) {
   }
   return Array.from(consolidated.values()).slice(0, 10);
 }
-function generateIndustryInsights(topics, _description, _repoContext, _model) {
-  core3.info("Generating industry insights based on repository topics...");
-  return generateFallbackInsights(topics);
-}
-function generateFallbackInsights(topics) {
-  const insights = [];
-  const topicInsights = {
-    "ai": {
-      topic: "AI/ML Integration",
-      summary: "AI-powered features are becoming standard in developer tools",
-      relevance: "Consider adding AI-assisted features to enhance user productivity",
-      sources: ["Industry trends in developer tooling"],
-      actionable: true
-    },
-    "automation": {
-      topic: "Automation Trends",
-      summary: "Workflow automation continues to grow in importance",
-      relevance: "Expanding automation capabilities aligns with industry direction",
-      sources: ["DevOps automation trends"],
-      actionable: true
-    },
-    "security": {
-      topic: "Security-First Development",
-      summary: "Supply chain security is a top priority for organizations",
-      relevance: "Security features provide significant competitive advantage",
-      sources: ["OWASP, industry security reports"],
-      actionable: true
-    },
-    "typescript": {
-      topic: "TypeScript Adoption",
-      summary: "TypeScript continues to dominate for new JavaScript projects",
-      relevance: "Strong typing improves maintainability and developer experience",
-      sources: ["State of JS surveys"],
-      actionable: false
-    }
-  };
-  for (const topic of topics) {
-    const lowerTopic = topic.toLowerCase();
-    for (const [key, insight] of Object.entries(topicInsights)) {
-      if (lowerTopic.includes(key)) {
-        insights.push(insight);
-        break;
-      }
-    }
-  }
-  return insights.slice(0, 5);
-}
 async function createHealthReportIssue(octokit, owner, repo, report) {
   const date = (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", {
     year: "numeric",
@@ -32868,7 +33939,7 @@ async function createHealthReportIssue(octokit, owner, repo, report) {
       issue_number: issueNumber,
       body
     });
-    core3.info(`Updated existing research issue #${issueNumber}`);
+    core7.info(`Updated existing research issue #${issueNumber}`);
     return issueNumber;
   } else {
     const newIssue = await octokit.rest.issues.create({
@@ -32878,7 +33949,7 @@ async function createHealthReportIssue(octokit, owner, repo, report) {
       body,
       labels: ["research-report"]
     });
-    core3.info(`Created research issue #${newIssue.data.number}`);
+    core7.info(`Created research issue #${newIssue.data.number}`);
     return newIssue.data.number;
   }
 }
@@ -32961,6 +34032,48 @@ function buildReportBody(report) {
       sections.push("");
     }
   }
+  if (report.issueReview) {
+    sections.push("\n## \u{1F4DD} Issue Review\n");
+    const ir = report.issueReview;
+    sections.push(`*${ir.summary}*
+`);
+    if (ir.staleIssues.length > 0) {
+      sections.push(`### Stale Issues (${ir.staleIssues.length})
+`);
+      for (const issue of ir.staleIssues.slice(0, 10)) {
+        sections.push(`- #${issue.number}: ${issue.title} \u2014 *${issue.daysSinceActivity} days inactive*`);
+      }
+      if (ir.staleIssues.length > 10) {
+        sections.push(`- *...and ${ir.staleIssues.length - 10} more*`);
+      }
+      sections.push("");
+    }
+    if (ir.duplicateCandidates.length > 0) {
+      sections.push(`### Potential Duplicates (${ir.duplicateCandidates.length} pairs)
+`);
+      for (const dup of ir.duplicateCandidates.slice(0, 5)) {
+        const issueRefs = dup.issues.map((i) => `#${i.number}`).join(" & ");
+        sections.push(`- ${issueRefs} (${Math.round(dup.similarity * 100)}% overlap)`);
+      }
+      sections.push("");
+    }
+    if (ir.closeCandidates.length > 0) {
+      sections.push(`### Close Candidates (${ir.closeCandidates.length})
+`);
+      for (const c of ir.closeCandidates.slice(0, 5)) {
+        sections.push(`- #${c.number}: ${c.title} \u2014 ${c.reason}`);
+      }
+      sections.push("");
+    }
+    if (ir.prioritySuggestions.length > 0) {
+      sections.push(`### Priority Suggestions (${ir.prioritySuggestions.length})
+`);
+      for (const ps of ir.prioritySuggestions.slice(0, 5)) {
+        sections.push(`- #${ps.number}: ${ps.title} \u2014 ${ps.currentPriority || "none"} \u2192 **${ps.suggestedPriority}** (${ps.reason})`);
+      }
+      sections.push("");
+    }
+  }
   if (report.recommendations.length > 0) {
     sections.push("\n## \u{1F4CB} Action Items\n");
     for (const rec of report.recommendations) {
@@ -32979,24 +34092,24 @@ async function createActionableIssuesFromReport(octokit, owner, repo, report, re
     const recPriorityIndex = priorityOrder.indexOf(rec.priority);
     return recPriorityIndex >= minPriorityIndex;
   });
-  core3.info(`Found ${filteredRecs.length} recommendations meeting priority threshold (${config.minPriorityForIssue}+)`);
+  core7.info(`Found ${filteredRecs.length} recommendations meeting priority threshold (${config.minPriorityForIssue}+)`);
   const existingIssues = await getExistingIssues(octokit, owner, repo);
   for (const rec of filteredRecs) {
     if (!rec.alignsWithVision) {
-      core3.info(`Skipping "${rec.title}" - does not align with project vision`);
+      core7.info(`Skipping "${rec.title}" - does not align with project vision`);
       continue;
     }
     const isDuplicate = checkForDuplicateIssue(rec, existingIssues);
     if (isDuplicate) {
-      core3.info(`Skipping "${rec.title}" - similar issue already exists`);
+      core7.info(`Skipping "${rec.title}" - similar issue already exists`);
       continue;
     }
     try {
       const issueNumber = await createActionableIssue(octokit, owner, repo, rec);
       createdIssues.push(issueNumber);
-      core3.info(`Created issue #${issueNumber}: ${rec.title}`);
+      core7.info(`Created issue #${issueNumber}: ${rec.title}`);
     } catch (error2) {
-      core3.warning(`Failed to create issue "${rec.title}": ${error2 instanceof Error ? error2.message : String(error2)}`);
+      core7.warning(`Failed to create issue "${rec.title}": ${error2 instanceof Error ? error2.message : String(error2)}`);
     }
   }
   return createdIssues;
@@ -33103,6 +34216,26 @@ ${insight.sources.map((s) => `- ${s}`).join("\n")}
       });
     }
   }
+  if (report.issueReview) {
+    const ir = report.issueReview;
+    if (ir.closeCandidates.length > 0) {
+      recommendations.push({
+        title: `Issue Cleanup: ${ir.closeCandidates.length} issues ready to close`,
+        description: `## Issue Cleanup
+
+The following issues appear ready to close based on staleness and labels:
+
+${ir.closeCandidates.slice(0, 10).map((c) => `- #${c.number}: ${c.title} (${c.reason})`).join("\n")}
+
+---
+*Created by Research Agent*`,
+        priority: "low",
+        category: "infrastructure",
+        labels: ["stale"],
+        alignsWithVision: true
+      });
+    }
+  }
   return recommendations;
 }
 function checkInsightVisionAlignment(insight, vision) {
@@ -33136,7 +34269,7 @@ async function getExistingIssues(octokit, owner, repo) {
       body: issue.body ?? null
     }));
   } catch {
-    core3.warning("Could not fetch existing issues for duplicate detection");
+    core7.warning("Could not fetch existing issues for duplicate detection");
     return [];
   }
 }
@@ -33178,7 +34311,7 @@ async function ensureLabelsExist(octokit, owner, repo, labels) {
         await octokit.rest.issues.createLabel({ owner, repo, name: label, color });
         validLabels.push(label);
       } catch {
-        core3.warning(`Could not create label: ${label}`);
+        core7.warning(`Could not create label: ${label}`);
       }
     }
   }
@@ -33209,11 +34342,11 @@ async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext
     repo,
     issue_number: issueNumber
   });
-  core3.info(`Researching issue #${issueNumber}: ${issue.title}`);
+  core7.info(`Researching issue #${issueNumber}: ${issue.title}`);
   const findings = await analyzeIssueContext(octokit, owner, repo, issue.title, issue.body || "", repoContext, config);
   const comment = buildIssueResearchComment(findings, issue.title);
   await createComment(octokit, ref, comment);
-  core3.info(`Posted research findings on issue #${issueNumber}`);
+  core7.info(`Posted research findings on issue #${issueNumber}`);
   try {
     await octokit.rest.issues.removeLabel({
       owner,
@@ -33223,8 +34356,8 @@ async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext
     });
   } catch {
   }
-  core3.setOutput("recommended-action", "assign-to-agent");
-  core3.setOutput("issue-number", String(issueNumber));
+  core7.setOutput("recommended-action", "assign-to-agent");
+  core7.setOutput("issue-number", String(issueNumber));
   const auditEntry = createAuditEntry("research-agent", `issue-focused:${issueNumber}`, [], [
     `mode:issue-focused`,
     `issue:${issueNumber}`,
@@ -33232,7 +34365,7 @@ async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext
     `recommendations:${findings.recommendations.length}`
   ], DEFAULT_MODEL);
   await logAgentDecision(octokit, ref, auditEntry);
-  core3.info(`Issue-focused research complete for #${issueNumber}`);
+  core7.info(`Issue-focused research complete for #${issueNumber}`);
 }
 async function analyzeIssueContext(octokit, owner, repo, issueTitle, issueBody, repoContext, config) {
   const contextSection = formatContextForPrompt(repoContext);
@@ -33273,7 +34406,7 @@ CRITICAL: Respond with ONLY a JSON object. No explanatory text.
         }
       }
     } catch (error2) {
-      core3.warning(`AI analysis failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+      core7.warning(`AI analysis failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
     }
   }
   return {

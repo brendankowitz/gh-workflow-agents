@@ -111,6 +111,7 @@ export interface ResearchReport {
   securityAdvisories: SecurityAdvisory[];
   featureSuggestions: FeatureSuggestion[];
   industryInsights: IndustryInsight[];
+  issueReview?: IssueReviewResult;
   recommendations: string[];
 }
 
@@ -153,6 +154,34 @@ export interface TechnicalDebtItem {
   location: string;
   estimatedEffort: 'small' | 'medium' | 'large';
   priority: 'low' | 'medium' | 'high';
+}
+
+/** Issue review result from open issue analysis */
+export interface IssueReviewResult {
+  totalReviewed: number;
+  staleIssues: Array<{
+    number: number;
+    title: string;
+    daysSinceActivity: number;
+    labels: string[];
+  }>;
+  duplicateCandidates: Array<{
+    issues: Array<{ number: number; title: string }>;
+    similarity: number;
+  }>;
+  closeCandidates: Array<{
+    number: number;
+    title: string;
+    reason: string;
+  }>;
+  prioritySuggestions: Array<{
+    number: number;
+    title: string;
+    currentPriority?: string;
+    suggestedPriority: string;
+    reason: string;
+  }>;
+  summary: string;
 }
 
 /** Security advisory */

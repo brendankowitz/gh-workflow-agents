@@ -4,9 +4,10 @@ description: |
 
   This agent autonomously analyzes your repository for:
   - Security vulnerabilities and advisories
-  - Outdated dependencies
-  - Technical debt
-  - Industry trends and feature suggestions
+  - Outdated dependencies (disk-based manifest scanning)
+  - Technical debt (codebase scanning for complexity, TODOs, architecture issues)
+  - Industry trends and feature suggestions (AI-powered, vision-driven)
+  - Open issue health (stale issues, duplicates, close candidates)
 
   It can automatically create actionable issues for recommendations
   that align with your project's vision.
@@ -42,9 +43,9 @@ inputs:
     required: false
     default: 'issue'
   focus-areas:
-    description: 'Comma-separated list of areas to analyze (dependencies, security, technical-debt, industry-research)'
+    description: 'Comma-separated list of areas to analyze (dependencies, security, technical-debt, industry-research, issue-review)'
     required: false
-    default: 'dependencies,security,technical-debt,industry-research'
+    default: 'dependencies,security,technical-debt,industry-research,issue-review'
   create-actionable-issues:
     description: 'Automatically create individual issues for actionable recommendations'
     required: false
@@ -56,6 +57,14 @@ inputs:
   issue-number:
     description: 'Issue number to research (for issue-focused mode, triggered by triage agent)'
     required: false
+  stale-days-threshold:
+    description: 'Days without activity before issue is considered stale'
+    required: false
+    default: '30'
+  max-scan-files:
+    description: 'Maximum source files to scan for technical debt (0 = unlimited)'
+    required: false
+    default: '500'
   mode:
     description: 'Research mode: scheduled (default weekly report) or issue-focused (targeted analysis for a specific issue)'
     required: false

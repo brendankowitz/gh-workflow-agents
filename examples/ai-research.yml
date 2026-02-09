@@ -74,7 +74,9 @@ jobs:
           copilot-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           model: claude-sonnet-4.5
           output-type: artifact              # Don't create a research report issue
-          focus-areas: 'dependencies,security,technical-debt,industry-research'
+          focus-areas: 'dependencies,security,technical-debt,industry-research,issue-review'
+          stale-days-threshold: '30'
+          max-scan-files: '500'
           # Autonomous issue creation settings:
           create-actionable-issues: 'true'   # Create individual issues directly
           min-priority-for-issue: 'medium'   # Create for medium/high/critical priority
