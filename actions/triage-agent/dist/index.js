@@ -33025,9 +33025,16 @@ async function run() {
   try {
     const config = getConfig();
     const actor = github.context.actor;
+    const eventName = github.context.eventName;
     if (isBot(actor)) {
-      core3.info(`Skipping triage for bot actor: ${actor}`);
-      return;
+      if (eventName === "workflow_dispatch") {
+        core3.info(`Bot actor ${actor} on workflow_dispatch - proceeding (autonomous pipeline)`);
+      } else if (eventName === "issues") {
+        core3.info(`Bot actor ${actor} on issues event - proceeding (research agent may create issues)`);
+      } else {
+        core3.info(`Skipping triage for bot actor on ${eventName}: ${actor}`);
+        return;
+      }
     }
     const circuitBreaker = createCircuitBreakerContext();
     checkCircuitBreaker(circuitBreaker);

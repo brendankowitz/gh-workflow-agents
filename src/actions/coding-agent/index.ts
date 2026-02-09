@@ -173,19 +173,25 @@ export async function run(): Promise<void> {
     // Get configuration
     const config = getConfig();
 
-    // Check for bot actors - but allow review bots to trigger feedback loops
-    // and allow /agent commands from any source
+    // Check for bot actors - but allow specific event types that are part of
+    // the autonomous pipeline (triage→coding→review feedback loop)
     const actor = github.context.actor;
     const eventName = github.context.eventName;
     if (isBot(actor)) {
-      // For pull_request_review events, the actor is the reviewer (a bot like ignixa-bot).
-      // The coding agent should still respond to review feedback from bots.
-      // Only skip if this is NOT a review event (e.g., a bot opened an issue).
-      if (eventName !== 'pull_request_review') {
+      // Allow bot actors for events that are part of the autonomous pipeline:
+      // - workflow_dispatch: triage/research agents dispatch coding via workflow_dispatch
+      // - pull_request_review: review agent submits changes_requested
+      // - issues with ready-for-agent: triage agent labels issues for coding
+      if (eventName === 'workflow_dispatch') {
+        core.info(`Bot actor ${actor} on workflow_dispatch - proceeding (autonomous pipeline)`);
+      } else if (eventName === 'pull_request_review') {
+        core.info(`Bot actor ${actor} submitted a review - proceeding with feedback handling`);
+      } else if (eventName === 'issues' && github.context.payload.label?.name === 'ready-for-agent') {
+        core.info(`Bot actor ${actor} added ready-for-agent label - proceeding`);
+      } else {
         core.info(`Skipping coding for bot actor: ${actor}`);
         return;
       }
-      core.info(`Bot actor ${actor} submitted a review - proceeding with feedback handling`);
     }
 
     // Check for /agent command in issue_comment events
@@ -342,14 +348,12 @@ export async function run(): Promise<void> {
       task,
       config
     );
-    if (commitResult.pushedSuccessfully) {
-      core.info(`Committed and pushed to branch: ${commitResult.branchName}`);
-    } else {
+    if (!commitResult.pushedSuccessfully) {
       core.error(`Failed to push to branch: ${commitResult.branchName}`);
 
       // Graceful fallback: post generated code as a comment so the work isn't lost
-      if (changes.files.length > 0 && (task.issueNumber || task.prNumber)) {
-        const targetNumber = task.issueNumber || task.prNumber || 0;
+      const targetNumber = task.issueNumber || task.prNumber || 0;
+      if (changes.files.length > 0 && targetNumber) {
         const issueRef: IssueRef = {
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
@@ -364,15 +368,33 @@ export async function run(): Promise<void> {
           .join('\n\n');
         const permNote = hasWorkflowFiles
           ? '\n\n> **Note:** This push failed because the token lacks permission to create/update workflow files (`.github/workflows/`). ' +
-            'To enable automatic pushes, ensure the `COPILOT_GITHUB_TOKEN` PAT has **Contents: Read and write** and **Workflows: Read and write** permissions for this repository.'
+            'To enable automatic pushes, ensure the GitHub App has **Contents** and **Workflows** write permissions, ' +
+            'or use a PAT with **Contents: Read and write** and **Workflows: Read and write** permissions.'
           : '';
         await createComment(octokit, issueRef,
           `## Unable to Push Changes\n\nThe coding agent generated the following changes but could not push them to the repository.${permNote}\n\n` +
-          `**Please add these files manually:**\n\n${filesSection}\n\n---\n*Summary: ${changes.summary || 'N/A'}*`
+          `**Please add these files manually:**\n\n${filesSection}\n\n` +
+          `*${changes.files.length} file(s) changed across 1 iteration(s). Status: Complete**`
         );
         core.info('Posted generated code as comment on issue (fallback for push failure)');
+
+        // Clean up labels to prevent death loops — mark as needing human review
+        await Promise.all([
+          removeLabels(octokit, issueRef, ['assigned-to-agent', 'ready-for-agent']),
+          addLabels(octokit, issueRef, ['needs-human-review']),
+        ]);
+        core.info('Updated labels: removed assigned-to-agent, added needs-human-review');
       }
+
+      // Skip PR management — no branch was pushed
+      core.setOutput('status', 'push-failed');
+      core.setOutput('changes-summary', changes.summary);
+      core.setFailed('Push failed — generated code posted as comment for manual application');
+      failed = true;
+      return;
     }
+
+    core.info(`Committed and pushed to branch: ${commitResult.branchName}`);
 
     // Phase 5: Manage PR (create or update)
     core.info('Phase 5: Managing pull request...');
@@ -479,6 +501,33 @@ function parseAgentCommand(body: string): { command: string; instructions: strin
 }
 
 /**
+ * Checks if an issue already has an "Unable to Push Changes" comment,
+ * indicating a previous push failure that requires human intervention.
+ * This prevents death loops where the agent retries the same failing issue.
+ */
+async function hasPreviousPushFailure(
+  octokit: ReturnType<typeof createOctokit>,
+  issueNumber: number
+): Promise<boolean> {
+  try {
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      issue_number: issueNumber,
+      per_page: 30,
+    });
+
+    return comments.some(
+      (c) =>
+        c.user?.login === 'github-actions[bot]' &&
+        c.body?.includes('## Unable to Push Changes')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Determines the coding task from GitHub context
  */
 async function getTaskFromContext(
@@ -498,6 +547,19 @@ async function getTaskFromContext(
           repo: github.context.repo.repo,
           issue_number: issueNumber,
         });
+
+        // Check for previous push failure to prevent death loops
+        if (await hasPreviousPushFailure(octokit, issueNumber)) {
+          // Check if issue has needs-human-review label (definitive stop)
+          const hasStopLabel = issue.labels?.some(
+            (l: any) => (typeof l === 'string' ? l : l.name) === 'needs-human-review'
+          );
+          if (hasStopLabel) {
+            core.info(`Issue #${issueNumber} has needs-human-review label and previous push failure — skipping to prevent loop`);
+            return null;
+          }
+          core.warning(`Issue #${issueNumber} has a previous "Unable to Push Changes" comment — will retry but may fail again`);
+        }
 
         // Check for research agent findings in issue comments
         const researchFindings = await fetchResearchFindings(octokit, issueNumber);
@@ -585,7 +647,13 @@ async function getTaskFromContext(
   // Case 3: Issues event with 'ready-for-agent' label
   if (eventName === 'issues' && payload.issue) {
     const hasLabel = payload.issue.labels?.some((l: any) => l.name === 'ready-for-agent');
-    if (hasLabel) {
+    const hasStopLabel = payload.issue.labels?.some((l: any) => l.name === 'needs-human-review');
+    if (hasLabel && !hasStopLabel) {
+      // Check for previous push failure to prevent death loops
+      if (await hasPreviousPushFailure(octokit, payload.issue.number)) {
+        core.info(`Issue #${payload.issue.number} has previous push failure — skipping to prevent loop`);
+        return null;
+      }
       return {
         type: 'issue',
         issueNumber: payload.issue.number,
@@ -1929,10 +1997,20 @@ async function commitAndPush(
     return await commitAndPushWithToken(primaryToken, changes, task, config);
   } catch (error: any) {
     const msg = error?.message || String(error);
-    if (msg.includes('Resource not accessible')) {
-      core.warning(`GITHUB_TOKEN API push failed: ${msg}`);
+    const status = error?.status;
+    // Fall back to git CLI for any auth/permission errors:
+    // - "Resource not accessible" (GITHUB_TOKEN scope limitation)
+    // - "refusing to allow" (workflow file permission)
+    // - 403 status (general permission denied)
+    if (
+      msg.includes('Resource not accessible') ||
+      msg.includes('refusing to allow') ||
+      msg.includes('workflow') ||
+      status === 403
+    ) {
+      core.warning(`API push failed (${status || 'auth error'}): ${msg}`);
 
-      // Fall back to git CLI — tries GITHUB_TOKEN then App token
+      // Fall back to git CLI — tries GITHUB_TOKEN, App token, then Copilot PAT
       core.info('API push failed — falling back to git CLI...');
       return await commitAndPushWithGit(changes, task, config);
     }
@@ -2024,14 +2102,22 @@ async function commitAndPushWithGit(
 
     // Build ordered list of tokens to try.
     // GITHUB_TOKEN first (workflow grants contents:write),
-    // then GitHub App token (has workflows permission for .github/workflows/ files).
+    // then GitHub App token (may have workflows permission for .github/workflows/ files),
+    // then Copilot PAT as last resort (may have workflow scope if user configured it).
     const tokensToTry: Array<{ label: string; token: string }> = [];
+    const seenTokens = new Set<string>();
 
     if (config.githubToken) {
       tokensToTry.push({ label: 'GITHUB_TOKEN', token: config.githubToken });
+      seenTokens.add(config.githubToken);
     }
-    if (config.appToken && config.appToken !== config.githubToken) {
+    if (config.appToken && !seenTokens.has(config.appToken)) {
       tokensToTry.push({ label: 'App token', token: config.appToken });
+      seenTokens.add(config.appToken);
+    }
+    if (config.copilotToken && !seenTokens.has(config.copilotToken)) {
+      tokensToTry.push({ label: 'Copilot PAT', token: config.copilotToken });
+      seenTokens.add(config.copilotToken);
     }
 
     // Check which files we're pushing (for error diagnostics)
@@ -2077,15 +2163,15 @@ async function commitAndPushWithGit(
     }
 
     if (!pushSucceeded) {
-      core.error('All git push attempts failed');
+      core.error(`All git push attempts failed (tried ${tokensToTry.map(t => t.label).join(', ')})`);
       // Provide actionable diagnostics
       if (hasWorkflowFiles) {
         core.error(
           'Changes include .github/workflows/ files. To push workflow files:\n' +
-          '  - GITHUB_TOKEN: requires the workflow to have contents:write permission\n' +
+          '  - GitHub App token: add "Workflows: Read and write" permission to the App\n' +
           '  - PAT (fine-grained): requires "Contents: Read and write" AND "Workflows: Read and write" permissions\n' +
           '  - PAT (classic): requires the "workflow" scope\n' +
-          'Check that your COPILOT_GITHUB_TOKEN has the necessary permissions for this repository.'
+          '  - GITHUB_TOKEN: CANNOT push workflow files (GitHub security restriction)'
         );
       }
       for (const err of pushErrors) {
@@ -2314,8 +2400,15 @@ async function commitAndPushWithToken(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
 
-    // Re-throw auth/permission errors so the token fallback in commitAndPush() can retry
-    if (msg.includes('Resource not accessible')) {
+    // Re-throw auth/permission errors so the token fallback in commitAndPush() can retry.
+    // This covers: "Resource not accessible by integration" (GITHUB_TOKEN scope),
+    // "refusing to allow...workflow" (workflow file permission), 403 errors, etc.
+    if (
+      msg.includes('Resource not accessible') ||
+      msg.includes('refusing to allow') ||
+      msg.includes('workflow') ||
+      (error as any)?.status === 403
+    ) {
       throw error;
     }
 

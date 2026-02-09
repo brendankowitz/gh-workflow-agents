@@ -65,10 +65,21 @@ export async function run(): Promise<void> {
     const config = getConfig();
 
     // Check for bot-triggered events (prevent loops)
+    // But allow bot actors for:
+    // - workflow_dispatch: manual re-triage or agent-triggered triage
+    // - issues.opened/edited: research agent creates issues that need triage
+    // Block bots only for issue_comment events (prevent comment loops)
     const actor = github.context.actor;
+    const eventName = github.context.eventName;
     if (isBot(actor)) {
-      core.info(`Skipping triage for bot actor: ${actor}`);
-      return;
+      if (eventName === 'workflow_dispatch') {
+        core.info(`Bot actor ${actor} on workflow_dispatch - proceeding (autonomous pipeline)`);
+      } else if (eventName === 'issues') {
+        core.info(`Bot actor ${actor} on issues event - proceeding (research agent may create issues)`);
+      } else {
+        core.info(`Skipping triage for bot actor on ${eventName}: ${actor}`);
+        return;
+      }
     }
 
     // Initialize circuit breaker
