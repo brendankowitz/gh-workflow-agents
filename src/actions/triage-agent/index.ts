@@ -362,6 +362,7 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
     core.setOutput('is-actionable', validated.isActionable);
     core.setOutput('aligns-with-vision', validated.alignsWithVision);
     core.setOutput('recommended-action', validated.recommendedAction);
+    // sub-issue-numbers is populated later by the create-sub-issues handler
 
     if (config.dryRun) {
       core.info('Dry run mode - not applying changes');
@@ -533,6 +534,11 @@ Once I have a clearer picture, I can get this moving forward.
         if (subIssuesToCreate && subIssuesToCreate.length > 0) {
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map(n => `#${n}`).join(', ')}`);
+
+          // Expose sub-issue numbers so the workflow can dispatch coding agent runs.
+          // GITHUB_TOKEN label/comment events don't re-trigger other workflows,
+          // so the workflow must use workflow_dispatch explicitly for each sub-issue.
+          core.setOutput('sub-issue-numbers', createdIssues.join(','));
 
           // Immediately assign all sub-issues to AI coding agent
           for (let i = 0; i < createdIssues.length; i++) {

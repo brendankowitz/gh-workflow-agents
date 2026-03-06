@@ -33769,6 +33769,7 @@ Closing this to consolidate the conversation.`;
         if (subIssuesToCreate && subIssuesToCreate.length > 0) {
           const createdIssues = await createSubIssues(octokit, ref, subIssuesToCreate);
           core4.info(`Created ${createdIssues.length} sub-issues from #${issue.number}: ${createdIssues.map((n) => `#${n}`).join(", ")}`);
+          core4.setOutput("sub-issue-numbers", createdIssues.join(","));
           for (let i = 0; i < createdIssues.length; i++) {
             const subIssueNumber = createdIssues[i];
             const subIssue = subIssuesToCreate[i];

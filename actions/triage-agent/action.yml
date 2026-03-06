@@ -58,6 +58,8 @@ outputs:
     description: 'Whether the issue aligns with project vision and goals'
   recommended-action:
     description: 'Recommended action (assign-to-agent, request-clarification, close-as-wontfix, close-as-duplicate, human-review)'
+  sub-issue-numbers:
+    description: 'Comma-separated issue numbers created when recommended-action is create-sub-issues'
 
 runs:
   using: 'node20'
