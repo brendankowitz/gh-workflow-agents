@@ -68,7 +68,7 @@ export interface TriageResult {
   /** How the issue aligns (or conflicts) with vision */
   visionAlignmentReason: string;
   /** Recommended action for this issue */
-  recommendedAction: 'assign-to-agent' | 'request-clarification' | 'close-as-wontfix' | 'close-as-duplicate' | 'human-review' | 'create-sub-issues' | 'route-to-research';
+  recommendedAction: 'assign-to-agent' | 'request-clarification' | 'close-as-wontfix' | 'close-as-duplicate' | 'human-review' | 'create-sub-issues' | 'route-to-research' | 'defer-to-contributor';
   /** Sub-issues to create (when recommendedAction is 'create-sub-issues') */
   subIssues?: SubIssueDefinition[];
   /** Files examined during codebase exploration */

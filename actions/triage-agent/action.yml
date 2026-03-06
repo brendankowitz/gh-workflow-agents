@@ -36,6 +36,10 @@ inputs:
     description: 'Automatically apply suggested labels'
     required: false
     default: 'true'
+  allow-external-ai-contributors:
+    description: 'When true, external AI agents that offer to contribute are welcomed instead of routing to the internal coding agent'
+    required: false
+    default: 'false'
 
 outputs:
   classification:
