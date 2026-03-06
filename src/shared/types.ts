@@ -112,7 +112,20 @@ export interface ResearchReport {
   featureSuggestions: FeatureSuggestion[];
   industryInsights: IndustryInsight[];
   issueReview?: IssueReviewResult;
+  ciFailures?: CiFailure[];
   recommendations: string[];
+}
+
+/** A GitHub Actions workflow that is currently failing on the default branch */
+export interface CiFailure {
+  workflowName: string;
+  workflowId: number;
+  branch: string;
+  lastRunStatus: string;
+  lastRunConclusion: string;
+  lastRunAt: string;
+  lastRunUrl: string;
+  consecutiveFailures: number;
 }
 
 /** Feature suggestion from industry research */

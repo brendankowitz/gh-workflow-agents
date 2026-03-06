@@ -399,7 +399,7 @@ var require_tunnel = __commonJS({
         connectOptions.headers = connectOptions.headers || {};
         connectOptions.headers["Proxy-Authorization"] = "Basic " + new Buffer(connectOptions.proxyAuth).toString("base64");
       }
-      debug2("making CONNECT request");
+      debug3("making CONNECT request");
       var connectReq = self.request(connectOptions);
       connectReq.useChunkedEncodingByDefault = false;
       connectReq.once("response", onResponse);
@@ -419,7 +419,7 @@ var require_tunnel = __commonJS({
         connectReq.removeAllListeners();
         socket.removeAllListeners();
         if (res.statusCode !== 200) {
-          debug2(
+          debug3(
             "tunneling socket could not be established, statusCode=%d",
             res.statusCode
           );
@@ -431,7 +431,7 @@ var require_tunnel = __commonJS({
           return;
         }
         if (head.length > 0) {
-          debug2("got illegal response body from proxy");
+          debug3("got illegal response body from proxy");
           socket.destroy();
           var error2 = new Error("got illegal response body from proxy");
           error2.code = "ECONNRESET";
@@ -439,13 +439,13 @@ var require_tunnel = __commonJS({
           self.removeSocket(placeholder);
           return;
         }
-        debug2("tunneling connection has established");
+        debug3("tunneling connection has established");
         self.sockets[self.sockets.indexOf(placeholder)] = socket;
         return cb(socket);
       }
       function onError(cause) {
         connectReq.removeAllListeners();
-        debug2(
+        debug3(
           "tunneling socket could not be established, cause=%s\n",
           cause.message,
           cause.stack
@@ -507,9 +507,9 @@ var require_tunnel = __commonJS({
       }
       return target;
     }
-    var debug2;
+    var debug3;
     if (process.env.NODE_DEBUG && /\btunnel\b/.test(process.env.NODE_DEBUG)) {
-      debug2 = function() {
+      debug3 = function() {
         var args = Array.prototype.slice.call(arguments);
         if (typeof args[0] === "string") {
           args[0] = "TUNNEL: " + args[0];
@@ -519,10 +519,10 @@ var require_tunnel = __commonJS({
         console.error.apply(console, args);
       };
     } else {
-      debug2 = function() {
+      debug3 = function() {
       };
     }
-    exports.debug = debug2;
+    exports.debug = debug3;
   }
 });
 
@@ -17587,12 +17587,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info8 = this._prepareRequest(verb, parsedUrl, headers);
+          let info9 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info8, data);
+            response = yield this.requestRaw(info9, data);
             if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -17602,7 +17602,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info8, data);
+                return authenticationHandler.handleAuthentication(this, info9, data);
               } else {
                 return response;
               }
@@ -17625,8 +17625,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info8 = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info8, data);
+              info9 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info9, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes.includes(response.message.statusCode)) {
@@ -17655,7 +17655,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info8, data) {
+      requestRaw(info9, data) {
         return __awaiter(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -17667,7 +17667,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info8, data, callbackForResult);
+            this.requestRawWithCallback(info9, data, callbackForResult);
           });
         });
       }
@@ -17677,12 +17677,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info8, data, onResult) {
+      requestRawWithCallback(info9, data, onResult) {
         if (typeof data === "string") {
-          if (!info8.options.headers) {
-            info8.options.headers = {};
+          if (!info9.options.headers) {
+            info9.options.headers = {};
           }
-          info8.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info9.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -17691,7 +17691,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info8.httpModule.request(info8.options, (msg) => {
+        const req = info9.httpModule.request(info9.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -17703,7 +17703,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info8.options.path}`));
+          handleResult(new Error(`Request timeout: ${info9.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -17739,27 +17739,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info8 = {};
-        info8.parsedUrl = requestUrl;
-        const usingSsl = info8.parsedUrl.protocol === "https:";
-        info8.httpModule = usingSsl ? https : http;
+        const info9 = {};
+        info9.parsedUrl = requestUrl;
+        const usingSsl = info9.parsedUrl.protocol === "https:";
+        info9.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info8.options = {};
-        info8.options.host = info8.parsedUrl.hostname;
-        info8.options.port = info8.parsedUrl.port ? parseInt(info8.parsedUrl.port) : defaultPort;
-        info8.options.path = (info8.parsedUrl.pathname || "") + (info8.parsedUrl.search || "");
-        info8.options.method = method;
-        info8.options.headers = this._mergeHeaders(headers);
+        info9.options = {};
+        info9.options.host = info9.parsedUrl.hostname;
+        info9.options.port = info9.parsedUrl.port ? parseInt(info9.parsedUrl.port) : defaultPort;
+        info9.options.path = (info9.parsedUrl.pathname || "") + (info9.parsedUrl.search || "");
+        info9.options.method = method;
+        info9.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info8.options.headers["user-agent"] = this.userAgent;
+          info9.options.headers["user-agent"] = this.userAgent;
         }
-        info8.options.agent = this._getAgent(info8.parsedUrl);
+        info9.options.agent = this._getAgent(info9.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info8.options);
+            handler2.prepareRequest(info9.options);
           }
         }
-        return info8;
+        return info9;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -19733,26 +19733,26 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       return process.env["RUNNER_DEBUG"] === "1";
     }
     exports.isDebug = isDebug;
-    function debug2(message) {
+    function debug3(message) {
       (0, command_1.issueCommand)("debug", {}, message);
     }
-    exports.debug = debug2;
+    exports.debug = debug3;
     function error2(message, properties = {}) {
       (0, command_1.issueCommand)("error", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.error = error2;
-    function warning8(message, properties = {}) {
+    function warning9(message, properties = {}) {
       (0, command_1.issueCommand)("warning", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
-    exports.warning = warning8;
+    exports.warning = warning9;
     function notice(message, properties = {}) {
       (0, command_1.issueCommand)("notice", (0, utils_1.toCommandProperties)(properties), message instanceof Error ? message.toString() : message);
     }
     exports.notice = notice;
-    function info8(message) {
+    function info9(message) {
       process.stdout.write(message + os.EOL);
     }
-    exports.info = info8;
+    exports.info = info9;
     function startGroup(name) {
       (0, command_1.issue)("group", name);
     }
@@ -25074,8 +25074,8 @@ var require_messageReader = __commonJS({
       get onPartialMessage() {
         return this.partialMessageEmitter.event;
       }
-      firePartialMessage(info8) {
-        this.partialMessageEmitter.fire(info8);
+      firePartialMessage(info9) {
+        this.partialMessageEmitter.fire(info9);
       }
       asError(error2) {
         if (error2 instanceof Error) {
@@ -27236,7 +27236,7 @@ var require_node = __commonJS({
 });
 
 // dist/actions/research-agent/index.js
-var core7 = __toESM(require_core(), 1);
+var core8 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/types.js
@@ -33767,6 +33767,79 @@ function buildSummary(total, stale, duplicates, closeCandidates) {
   return parts.join(" ");
 }
 
+// dist/actions/research-agent/ci-scanner.js
+var core7 = __toESM(require_core(), 1);
+var RUNS_TO_CHECK = 5;
+var FAILURE_CONCLUSIONS = /* @__PURE__ */ new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
+var IGNORED_WORKFLOW_NAMES = /* @__PURE__ */ new Set([
+  "CodeQL",
+  "Dependabot"
+]);
+async function scanCiHealth(octokit, owner, repo) {
+  const failures = [];
+  let defaultBranch = "main";
+  try {
+    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+    defaultBranch = repoData.default_branch;
+  } catch {
+    core7.debug("ci-scanner: could not fetch default branch, defaulting to main");
+  }
+  let workflows = [];
+  try {
+    const { data } = await octokit.rest.actions.listRepoWorkflows({ owner, repo, per_page: 100 });
+    workflows = data.workflows.filter((w) => w.state === "active");
+  } catch (err) {
+    core7.warning(`ci-scanner: could not list workflows \u2014 ${err instanceof Error ? err.message : String(err)}`);
+    return { failures: [], summary: "Could not fetch workflow list." };
+  }
+  core7.info(`ci-scanner: checking ${workflows.length} active workflow(s) on branch '${defaultBranch}'`);
+  for (const workflow of workflows) {
+    if (IGNORED_WORKFLOW_NAMES.has(workflow.name))
+      continue;
+    try {
+      const { data: runsData } = await octokit.rest.actions.listWorkflowRuns({
+        owner,
+        repo,
+        workflow_id: workflow.id,
+        branch: defaultBranch,
+        per_page: RUNS_TO_CHECK,
+        // Only completed runs — in-progress runs are not failures yet
+        status: "completed"
+      });
+      const runs = runsData.workflow_runs;
+      if (runs.length === 0)
+        continue;
+      const latest = runs[0];
+      const conclusion = latest.conclusion ?? "";
+      if (!FAILURE_CONCLUSIONS.has(conclusion))
+        continue;
+      let consecutive = 0;
+      for (const run2 of runs) {
+        if (FAILURE_CONCLUSIONS.has(run2.conclusion ?? "")) {
+          consecutive++;
+        } else {
+          break;
+        }
+      }
+      failures.push({
+        workflowName: workflow.name,
+        workflowId: workflow.id,
+        branch: defaultBranch,
+        lastRunStatus: latest.status ?? "completed",
+        lastRunConclusion: conclusion,
+        lastRunAt: latest.updated_at,
+        lastRunUrl: latest.html_url,
+        consecutiveFailures: consecutive
+      });
+      core7.info(`ci-scanner: '${workflow.name}' is failing (${consecutive} consecutive failure(s))`);
+    } catch (err) {
+      core7.debug(`ci-scanner: skipping workflow '${workflow.name}' \u2014 ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  const summary = failures.length === 0 ? "All CI workflows are passing." : `${failures.length} workflow(s) are currently failing on '${defaultBranch}': ${failures.map((f) => `'${f.workflowName}' (${f.consecutiveFailures} run(s))`).join(", ")}.`;
+  return { failures, summary };
+}
+
 // dist/actions/research-agent/index.js
 async function run() {
   try {
@@ -33776,29 +33849,29 @@ async function run() {
     const octokit = createOctokit(config.githubToken);
     const owner = github.context.repo.owner;
     const repo = github.context.repo.repo;
-    core7.info("Loading repository context...");
+    core8.info("Loading repository context...");
     const repoContext = await loadRepositoryContext(octokit, owner, repo);
     if (config.mode === "issue-focused" && config.issueNumber) {
-      core7.info(`Running issue-focused research for issue #${config.issueNumber}...`);
+      core8.info(`Running issue-focused research for issue #${config.issueNumber}...`);
       await runIssueFocusedResearch(octokit, owner, repo, config, repoContext);
       return;
     }
-    core7.info("Analyzing repository health...");
+    core8.info("Analyzing repository health...");
     const report = await analyzeRepository(octokit, owner, repo, config, repoContext);
-    core7.setOutput("report", JSON.stringify(report));
-    core7.setOutput("dependency-updates", report.dependencyUpdates.length);
-    core7.setOutput("technical-debt-items", report.technicalDebt.length);
-    core7.setOutput("security-advisories", report.securityAdvisories.length);
+    core8.setOutput("report", JSON.stringify(report));
+    core8.setOutput("dependency-updates", report.dependencyUpdates.length);
+    core8.setOutput("technical-debt-items", report.technicalDebt.length);
+    core8.setOutput("security-advisories", report.securityAdvisories.length);
     let issueNumber;
     if (config.outputType === "issue") {
       issueNumber = await createHealthReportIssue(octokit, owner, repo, report);
     }
     let createdIssues = [];
     if (config.createActionableIssues) {
-      core7.info("Creating actionable issues for recommendations...");
+      core8.info("Creating actionable issues for recommendations...");
       createdIssues = await createActionableIssuesFromReport(octokit, owner, repo, report, repoContext, config);
-      core7.setOutput("issues-created", createdIssues.length);
-      core7.setOutput("issue-numbers", createdIssues.join(","));
+      core8.setOutput("issues-created", createdIssues.length);
+      core8.setOutput("issue-numbers", createdIssues.join(","));
     }
     if (issueNumber) {
       const auditEntry = createAuditEntry("research-agent", JSON.stringify(config.focusAreas), [], [
@@ -33813,12 +33886,12 @@ async function run() {
       const ref = { owner, repo, issueNumber };
       await logAgentDecision(octokit, ref, auditEntry);
     }
-    core7.info(`Research complete. Created ${createdIssues.length} actionable issues.`);
+    core8.info(`Research complete. Created ${createdIssues.length} actionable issues.`);
   } catch (error2) {
     if (error2 instanceof Error) {
-      core7.setFailed(error2.message);
+      core8.setFailed(error2.message);
     } else {
-      core7.setFailed("An unknown error occurred");
+      core8.setFailed("An unknown error occurred");
     }
   } finally {
     try {
@@ -33829,28 +33902,28 @@ async function run() {
   }
 }
 function getConfig() {
-  const copilotToken = core7.getInput("copilot-token");
+  const copilotToken = core8.getInput("copilot-token");
   if (copilotToken) {
     process.env.COPILOT_GITHUB_TOKEN = copilotToken;
   }
-  const focusAreasInput = core7.getInput("focus-areas");
+  const focusAreasInput = core8.getInput("focus-areas");
   const focusAreas = focusAreasInput ? focusAreasInput.split(",").map((s) => s.trim()) : ["dependencies", "security", "technical-debt", "industry-research", "issue-review"];
-  const minPriority = core7.getInput("min-priority-for-issue") || "high";
+  const minPriority = core8.getInput("min-priority-for-issue") || "high";
   const validPriorities = ["low", "medium", "high", "critical"];
-  const issueNumberInput = core7.getInput("issue-number");
+  const issueNumberInput = core8.getInput("issue-number");
   const issueNumber = issueNumberInput ? parseInt(issueNumberInput, 10) : void 0;
-  const mode = core7.getInput("mode") || "scheduled";
+  const mode = core8.getInput("mode") || "scheduled";
   return {
-    githubToken: core7.getInput("github-token", { required: true }),
-    model: core7.getInput("model") || "claude-sonnet-4.5",
-    outputType: core7.getInput("output-type") || "issue",
+    githubToken: core8.getInput("github-token", { required: true }),
+    model: core8.getInput("model") || "claude-sonnet-4.5",
+    outputType: core8.getInput("output-type") || "issue",
     focusAreas,
-    createActionableIssues: core7.getInput("create-actionable-issues") === "true",
+    createActionableIssues: core8.getInput("create-actionable-issues") === "true",
     minPriorityForIssue: validPriorities.includes(minPriority) ? minPriority : "high",
     issueNumber: issueNumber && !isNaN(issueNumber) ? issueNumber : void 0,
     mode,
-    staleDaysThreshold: parseInt(core7.getInput("stale-days-threshold") || "30", 10) || 30,
-    maxScanFiles: parseInt(core7.getInput("max-scan-files") || "500", 10)
+    staleDaysThreshold: parseInt(core8.getInput("stale-days-threshold") || "30", 10) || 30,
+    maxScanFiles: parseInt(core8.getInput("max-scan-files") || "500", 10)
   };
 }
 async function analyzeRepository(octokit, owner, repo, config, repoContext) {
@@ -33872,7 +33945,7 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
     }
   }
   if (config.focusAreas.includes("security")) {
-    core7.info("Checking security advisories...");
+    core8.info("Checking security advisories...");
     try {
       const advisories = await octokit.rest.dependabot.listAlertsForRepo({
         owner,
@@ -33891,7 +33964,7 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
         });
       }
     } catch {
-      core7.info("Could not fetch Dependabot alerts (may require additional permissions)");
+      core8.info("Could not fetch Dependabot alerts (may require additional permissions)");
     }
   }
   if (config.focusAreas.includes("technical-debt")) {
@@ -33903,12 +33976,12 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
     }
   }
   if (config.focusAreas.includes("industry-research")) {
-    core7.info("Analyzing industry trends and similar projects...");
+    core8.info("Analyzing industry trends and similar projects...");
     const repoTopics = await getRepositoryTopics(octokit, owner, repo);
     const repoDescription = await getRepositoryDescription(octokit, owner, repo);
     const projectContext = await extractProjectContext(repoContext, repoDescription, repoTopics, config.model);
     if (repoTopics.length > 0) {
-      core7.info(`Searching for similar projects with topics: ${repoTopics.join(", ")}`);
+      core8.info(`Searching for similar projects with topics: ${repoTopics.join(", ")}`);
       const similarRepos = await searchSimilarRepositories(octokit, repoTopics, `${owner}/${repo}`);
       for (const similarRepo of similarRepos.slice(0, 5)) {
         const features = await analyzeRepositoryFeatures(octokit, similarRepo);
@@ -33936,6 +34009,14 @@ async function analyzeRepository(octokit, owner, repo, config, repoContext) {
   if (config.focusAreas.includes("issue-review")) {
     const issueReview = await reviewExistingIssues(octokit, owner, repo, repoContext, config.model, config.staleDaysThreshold);
     report.issueReview = issueReview;
+  }
+  if (config.focusAreas.includes("ci-health")) {
+    core8.info("Checking CI workflow health...");
+    const ciResult = await scanCiHealth(octokit, owner, repo);
+    report.ciFailures = ciResult.failures;
+    if (ciResult.failures.length > 0) {
+      report.recommendations.push(ciResult.summary);
+    }
   }
   if (report.securityAdvisories.length > 0) {
     report.recommendations.push(`Address ${report.securityAdvisories.length} open security advisories`);
@@ -34008,7 +34089,7 @@ async function searchSimilarRepositories(octokit, topics, excludeRepo) {
       }
     }
   } catch {
-    core7.info("Could not search for similar repositories");
+    core8.info("Could not search for similar repositories");
   }
   return results;
 }
@@ -34144,7 +34225,7 @@ async function createHealthReportIssue(octokit, owner, repo, report) {
       issue_number: issueNumber,
       body
     });
-    core7.info(`Updated existing research issue #${issueNumber}`);
+    core8.info(`Updated existing research issue #${issueNumber}`);
     return issueNumber;
   } else {
     const newIssue = await octokit.rest.issues.create({
@@ -34154,7 +34235,7 @@ async function createHealthReportIssue(octokit, owner, repo, report) {
       body,
       labels: ["research-report"]
     });
-    core7.info(`Created research issue #${newIssue.data.number}`);
+    core8.info(`Created research issue #${newIssue.data.number}`);
     return newIssue.data.number;
   }
 }
@@ -34279,6 +34360,18 @@ function buildReportBody(report) {
       sections.push("");
     }
   }
+  if (report.ciFailures !== void 0) {
+    sections.push("\n## \u{1F534} CI Health\n");
+    if (report.ciFailures.length === 0) {
+      sections.push("\u2705 All workflows are passing.\n");
+    } else {
+      sections.push(`\u26A0\uFE0F **${report.ciFailures.length} workflow(s) are currently failing**
+`);
+      for (const f of report.ciFailures) {
+        sections.push(`- \u274C **${f.workflowName}** \u2014 conclusion: \`${f.lastRunConclusion}\`, ${f.consecutiveFailures} consecutive failure(s) on \`${f.branch}\` ([view run](${f.lastRunUrl}))`);
+      }
+    }
+  }
   if (report.recommendations.length > 0) {
     sections.push("\n## \u{1F4CB} Action Items\n");
     for (const rec of report.recommendations) {
@@ -34297,24 +34390,24 @@ async function createActionableIssuesFromReport(octokit, owner, repo, report, re
     const recPriorityIndex = priorityOrder.indexOf(rec.priority);
     return recPriorityIndex >= minPriorityIndex;
   });
-  core7.info(`Found ${filteredRecs.length} recommendations meeting priority threshold (${config.minPriorityForIssue}+)`);
+  core8.info(`Found ${filteredRecs.length} recommendations meeting priority threshold (${config.minPriorityForIssue}+)`);
   const existingIssues = await getExistingIssues(octokit, owner, repo);
   for (const rec of filteredRecs) {
     if (!rec.alignsWithVision) {
-      core7.info(`Skipping "${rec.title}" - does not align with project vision`);
+      core8.info(`Skipping "${rec.title}" - does not align with project vision`);
       continue;
     }
     const isDuplicate = checkForDuplicateIssue(rec, existingIssues);
     if (isDuplicate) {
-      core7.info(`Skipping "${rec.title}" - similar issue already exists`);
+      core8.info(`Skipping "${rec.title}" - similar issue already exists`);
       continue;
     }
     try {
       const issueNumber = await createActionableIssue(octokit, owner, repo, rec);
       createdIssues.push(issueNumber);
-      core7.info(`Created issue #${issueNumber}: ${rec.title}`);
+      core8.info(`Created issue #${issueNumber}: ${rec.title}`);
     } catch (error2) {
-      core7.warning(`Failed to create issue "${rec.title}": ${error2 instanceof Error ? error2.message : String(error2)}`);
+      core8.warning(`Failed to create issue "${rec.title}": ${error2 instanceof Error ? error2.message : String(error2)}`);
     }
   }
   return createdIssues;
@@ -34421,6 +34514,30 @@ ${insight.sources.map((s) => `- ${s}`).join("\n")}
       });
     }
   }
+  for (const failure of report.ciFailures ?? []) {
+    recommendations.push({
+      title: `CI: Fix failing workflow "${failure.workflowName}"`,
+      description: `## Failing CI Workflow
+
+**Workflow:** ${failure.workflowName}
+**Branch:** \`${failure.branch}\`
+**Last run conclusion:** \`${failure.lastRunConclusion}\`
+**Consecutive failures:** ${failure.consecutiveFailures}
+**Last failed at:** ${failure.lastRunAt}
+**Run URL:** ${failure.lastRunUrl}
+
+### Action Required
+Investigate why the \`${failure.workflowName}\` workflow is failing and fix the root cause.
+Check the linked run for error logs and stack traces.
+
+---
+*Created by Research Agent*`,
+      priority: failure.consecutiveFailures >= 3 ? "high" : "medium",
+      category: "infrastructure",
+      labels: ["bug", "priority:high"],
+      alignsWithVision: true
+    });
+  }
   if (report.issueReview) {
     const ir = report.issueReview;
     if (ir.closeCandidates.length > 0) {
@@ -34474,7 +34591,7 @@ async function getExistingIssues(octokit, owner, repo) {
       body: issue.body ?? null
     }));
   } catch {
-    core7.warning("Could not fetch existing issues for duplicate detection");
+    core8.warning("Could not fetch existing issues for duplicate detection");
     return [];
   }
 }
@@ -34516,7 +34633,7 @@ async function ensureLabelsExist(octokit, owner, repo, labels) {
         await octokit.rest.issues.createLabel({ owner, repo, name: label, color });
         validLabels.push(label);
       } catch {
-        core7.warning(`Could not create label: ${label}`);
+        core8.warning(`Could not create label: ${label}`);
       }
     }
   }
@@ -34547,11 +34664,11 @@ async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext
     repo,
     issue_number: issueNumber
   });
-  core7.info(`Researching issue #${issueNumber}: ${issue.title}`);
+  core8.info(`Researching issue #${issueNumber}: ${issue.title}`);
   const findings = await analyzeIssueContext(octokit, owner, repo, issue.title, issue.body || "", repoContext, config);
   const comment = buildIssueResearchComment(findings, issue.title);
   await createComment(octokit, ref, comment);
-  core7.info(`Posted research findings on issue #${issueNumber}`);
+  core8.info(`Posted research findings on issue #${issueNumber}`);
   try {
     await octokit.rest.issues.removeLabel({
       owner,
@@ -34561,8 +34678,8 @@ async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext
     });
   } catch {
   }
-  core7.setOutput("recommended-action", "assign-to-agent");
-  core7.setOutput("issue-number", String(issueNumber));
+  core8.setOutput("recommended-action", "assign-to-agent");
+  core8.setOutput("issue-number", String(issueNumber));
   const auditEntry = createAuditEntry("research-agent", `issue-focused:${issueNumber}`, [], [
     `mode:issue-focused`,
     `issue:${issueNumber}`,
@@ -34570,7 +34687,7 @@ async function runIssueFocusedResearch(octokit, owner, repo, config, repoContext
     `recommendations:${findings.recommendations.length}`
   ], DEFAULT_MODEL);
   await logAgentDecision(octokit, ref, auditEntry);
-  core7.info(`Issue-focused research complete for #${issueNumber}`);
+  core8.info(`Issue-focused research complete for #${issueNumber}`);
 }
 async function analyzeIssueContext(octokit, owner, repo, issueTitle, issueBody, repoContext, config) {
   const contextSection = formatContextForPrompt(repoContext);
@@ -34611,7 +34728,7 @@ CRITICAL: Respond with ONLY a JSON object. No explanatory text.
         }
       }
     } catch (error2) {
-      core7.warning(`AI analysis failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
+      core8.warning(`AI analysis failed, using heuristic fallback: ${error2 instanceof Error ? error2.message : String(error2)}`);
     }
   }
   return {

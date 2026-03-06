@@ -36,6 +36,7 @@ import {
   generateIndustryInsights as generateIndustryInsightsModule,
 } from './industry-insights.js';
 import { reviewExistingIssues } from './issue-reviewer.js';
+import { scanCiHealth } from './ci-scanner.js';
 
 /** Research agent configuration */
 interface ResearchConfig {
@@ -317,6 +318,16 @@ async function analyzeRepository(
       octokit, owner, repo, repoContext, config.model, config.staleDaysThreshold
     );
     report.issueReview = issueReview;
+  }
+
+  // CI health check
+  if (config.focusAreas.includes('ci-health')) {
+    core.info('Checking CI workflow health...');
+    const ciResult = await scanCiHealth(octokit, owner, repo);
+    report.ciFailures = ciResult.failures;
+    if (ciResult.failures.length > 0) {
+      report.recommendations.push(ciResult.summary);
+    }
   }
 
   // Generate recommendations
@@ -800,6 +811,23 @@ function buildReportBody(report: ResearchReport): string {
     }
   }
 
+  // CI health section
+  if (report.ciFailures !== undefined) {
+    sections.push('\n## 🔴 CI Health\n');
+    if (report.ciFailures.length === 0) {
+      sections.push('✅ All workflows are passing.\n');
+    } else {
+      sections.push(`⚠️ **${report.ciFailures.length} workflow(s) are currently failing**\n`);
+      for (const f of report.ciFailures) {
+        sections.push(
+          `- ❌ **${f.workflowName}** — conclusion: \`${f.lastRunConclusion}\`, ` +
+          `${f.consecutiveFailures} consecutive failure(s) on \`${f.branch}\` ` +
+          `([view run](${f.lastRunUrl}))`
+        );
+      }
+    }
+  }
+
   // Recommendations
   if (report.recommendations.length > 0) {
     sections.push('\n## 📋 Action Items\n');
@@ -986,6 +1014,32 @@ ${insight.sources.map((s) => `- ${s}`).join('\n')}
         alignsWithVision: aligns,
       });
     }
+  }
+
+  // Convert CI failures to recommendations — one issue per failing workflow
+  for (const failure of report.ciFailures ?? []) {
+    recommendations.push({
+      title: `CI: Fix failing workflow "${failure.workflowName}"`,
+      description: `## Failing CI Workflow
+
+**Workflow:** ${failure.workflowName}
+**Branch:** \`${failure.branch}\`
+**Last run conclusion:** \`${failure.lastRunConclusion}\`
+**Consecutive failures:** ${failure.consecutiveFailures}
+**Last failed at:** ${failure.lastRunAt}
+**Run URL:** ${failure.lastRunUrl}
+
+### Action Required
+Investigate why the \`${failure.workflowName}\` workflow is failing and fix the root cause.
+Check the linked run for error logs and stack traces.
+
+---
+*Created by Research Agent*`,
+      priority: failure.consecutiveFailures >= 3 ? 'high' : 'medium',
+      category: 'infrastructure',
+      labels: ['bug', 'priority:high'],
+      alignsWithVision: true,
+    });
   }
 
   // Convert issue review findings to recommendations
