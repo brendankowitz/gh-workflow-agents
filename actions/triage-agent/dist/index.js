@@ -33412,6 +33412,16 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
     core4.info(`Analyzing issue with Copilot SDK (model: ${config.model})...`);
     const result = await analyzeIssue(systemPrompt, userPrompt, config.model, sanitized);
     let validated = validateTriageOutput(result);
+    if (config.allowExternalAiContributors && commentSummary?.recommendation === "defer-to-external-ai") {
+      core4.info("Overriding triage action to defer-to-contributor based on comment summarizer");
+      validated = { ...validated, recommendedAction: "defer-to-contributor" };
+    } else if (commentSummary?.recommendation === "defer-to-human") {
+      core4.info("Overriding triage action to defer-to-contributor (human claimed issue)");
+      validated = { ...validated, recommendedAction: "defer-to-contributor" };
+    } else if (commentSummary?.recommendation === "already-resolved") {
+      core4.info("Overriding triage action: issue appears resolved in comments");
+      validated = { ...validated, recommendedAction: "close-as-duplicate" };
+    }
     const isResearchReport = issue.title.toLowerCase().includes("research report") || issue.body.includes("GH-Agency Research Agent") || validated.classification === "research-report";
     if (isResearchReport && validated.isActionable && validated.alignsWithVision) {
       if (validated.recommendedAction === "human-review") {

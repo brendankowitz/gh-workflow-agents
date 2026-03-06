@@ -322,6 +322,20 @@ Note: Only include "subIssues" array when recommendedAction is "create-sub-issue
     // Validate the result
     let validated = validateTriageOutput(result);
 
+    // ENFORCE: If the comment summarizer already made a decisive determination,
+    // override the AI's action rather than requiring the AI to re-derive it.
+    // This makes contributor deferral work even when the AI model is unavailable.
+    if (config.allowExternalAiContributors && commentSummary?.recommendation === 'defer-to-external-ai') {
+      core.info('Overriding triage action to defer-to-contributor based on comment summarizer');
+      validated = { ...validated, recommendedAction: 'defer-to-contributor' };
+    } else if (commentSummary?.recommendation === 'defer-to-human') {
+      core.info('Overriding triage action to defer-to-contributor (human claimed issue)');
+      validated = { ...validated, recommendedAction: 'defer-to-contributor' };
+    } else if (commentSummary?.recommendation === 'already-resolved') {
+      core.info('Overriding triage action: issue appears resolved in comments');
+      validated = { ...validated, recommendedAction: 'close-as-duplicate' };
+    }
+
     // ENFORCE: Research reports that are actionable and aligned MUST create sub-issues
     const isResearchReport =
       issue.title.toLowerCase().includes('research report') ||
