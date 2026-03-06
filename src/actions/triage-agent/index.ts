@@ -452,15 +452,21 @@ This issue requires research analysis before implementation. Please investigate:
         break;
 
       case 'defer-to-contributor': {
-        const contributors = commentSummary?.externalAiContributors.map(c => c.user).join(', ')
-          || commentSummary?.humanClaimant
-          || 'an external contributor';
+        const uniqueUsers = [
+          ...new Set(commentSummary?.externalAiContributors.map(c => c.user) ?? []),
+        ];
+        if (commentSummary?.humanClaimant && !uniqueUsers.includes(commentSummary.humanClaimant)) {
+          uniqueUsers.push(commentSummary.humanClaimant);
+        }
+        const mentions = uniqueUsers.length > 0
+          ? uniqueUsers.map(u => `@${u}`).join(', ')
+          : '@contributor';
         const isExternalAi = (commentSummary?.externalAiContributors.length ?? 0) > 0;
 
         const deferComment = [
           `Thanks for offering to contribute! We're happy to have ${isExternalAi ? 'external AI contributors' : 'community contributions'} on this project.`,
           ``,
-          `**${contributors}** — please go ahead and submit a pull request addressing this issue.`,
+          `${mentions} — please go ahead and submit a pull request addressing this issue.`,
           ``,
           `A few things to know:`,
           `- Our **AI review agent** will automatically review your PR once submitted`,
@@ -470,7 +476,7 @@ This issue requires research analysis before implementation. Please investigate:
 
         await createComment(octokit, ref, deferComment + auditFooter);
         await addLabels(octokit, ref, ['help-wanted', 'status:triage'] as AllowedLabel[]);
-        core.info(`Deferred issue #${issue.number} to external contributor: ${contributors}`);
+        core.info(`Deferred issue #${issue.number} to: ${mentions}`);
         break;
       }
 
