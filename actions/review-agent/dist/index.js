@@ -33516,13 +33516,32 @@ async function isCopilotAvailable() {
   }
   return true;
 }
+function findCopilotCliPath() {
+  if (process.env.COPILOT_CLI_PATH)
+    return process.env.COPILOT_CLI_PATH;
+  try {
+    const { execSync } = __require("child_process");
+    const cmd = process.platform === "win32" ? "where copilot" : "which copilot";
+    const result = execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const first = result.split("\n")[0]?.trim();
+    return first || void 0;
+  } catch {
+    return void 0;
+  }
+}
 async function getCopilotClient() {
   if (!copilotClientInstance) {
     const available = await isCopilotAvailable();
     if (!available) {
       throw new Error("Copilot CLI not available in this environment. AI-powered insights will use fallback.");
     }
-    copilotClientInstance = new CopilotClient();
+    const cliPath = findCopilotCliPath();
+    if (cliPath) {
+      core.info(`Copilot CLI found at: ${cliPath}`);
+    } else {
+      core.warning("Copilot CLI not found in PATH; SDK will attempt its own resolution");
+    }
+    copilotClientInstance = new CopilotClient(cliPath ? { cliPath } : void 0);
     await copilotClientInstance.start();
     core.info("Copilot SDK client initialized");
   }

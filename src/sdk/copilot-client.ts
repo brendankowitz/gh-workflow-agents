@@ -116,6 +116,30 @@ export async function isCopilotAvailable(): Promise<boolean> {
 }
 
 /**
+ * Locates the globally installed `copilot` CLI binary via the system PATH.
+ *
+ * When the bundle is run as a single-file dist/index.js there are no local
+ * node_modules, so the SDK's built-in getBundledCliPath() cannot use
+ * import.meta.resolve("@github/copilot/sdk") to find the CLI.  Providing an
+ * explicit cliPath bypasses that code path entirely.
+ */
+function findCopilotCliPath(): string | undefined {
+  // Allow an explicit override (e.g. set by the workflow step)
+  if (process.env.COPILOT_CLI_PATH) return process.env.COPILOT_CLI_PATH;
+
+  try {
+    const { execSync } = require('child_process') as typeof import('child_process');
+    const cmd = process.platform === 'win32' ? 'where copilot' : 'which copilot';
+    const result = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    // `where` on Windows may return multiple lines; take the first
+    const first = result.split('\n')[0]?.trim();
+    return first || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Gets or creates the Copilot client instance
  * The Copilot CLI handles authentication automatically
  */
@@ -127,7 +151,17 @@ export async function getCopilotClient(): Promise<GHCopilotClient> {
       throw new Error('Copilot CLI not available in this environment. AI-powered insights will use fallback.');
     }
 
-    copilotClientInstance = new GHCopilotClient();
+    // Provide cliPath so the SDK never calls getBundledCliPath() which uses
+    // import.meta.resolve("@github/copilot/sdk") — that fails when running
+    // from a single-file bundle with no local node_modules.
+    const cliPath = findCopilotCliPath();
+    if (cliPath) {
+      core.info(`Copilot CLI found at: ${cliPath}`);
+    } else {
+      core.warning('Copilot CLI not found in PATH; SDK will attempt its own resolution');
+    }
+
+    copilotClientInstance = new GHCopilotClient(cliPath ? { cliPath } : undefined);
     await copilotClientInstance.start();
     core.info('Copilot SDK client initialized');
   }
