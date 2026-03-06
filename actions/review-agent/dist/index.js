@@ -27720,7 +27720,7 @@ var core3 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/types.js
-var DEFAULT_MODEL = "claude-sonnet-4.5";
+var DEFAULT_MODEL = "claude-sonnet-4.6";
 
 // dist/shared/sanitizer.js
 var INVISIBLE_CHARS = /[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF\u00AD\u180E\u200C\u200D]/g;

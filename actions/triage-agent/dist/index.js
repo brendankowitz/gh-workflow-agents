@@ -27240,7 +27240,7 @@ var core4 = __toESM(require_core(), 1);
 var github = __toESM(require_github(), 1);
 
 // dist/shared/types.js
-var DEFAULT_MODEL = "claude-sonnet-4.5";
+var DEFAULT_MODEL = "claude-sonnet-4.6";
 var ALLOWED_LABELS = [
   "bug",
   "feature",

@@ -5,14 +5,16 @@
 
 /** Supported AI models with their capability tiers */
 export type ModelId =
+  | 'claude-sonnet-4.6'
   | 'claude-sonnet-4.5'
+  | 'claude-opus-4.6'
   | 'claude-opus-4.5'
   | 'claude-haiku-4.5'
   | 'gpt-5'
   | 'gpt-5-mini';
 
 /** Default model for intelligent tasks */
-export const DEFAULT_MODEL: ModelId = 'claude-sonnet-4.5';
+export const DEFAULT_MODEL: ModelId = 'claude-sonnet-4.6';
 
 /** Agent persona configuration */
 export interface AgentPersona {
