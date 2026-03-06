@@ -172,6 +172,7 @@ export async function sendPrompt(
         mode: 'replace',
         content: systemPrompt,
       },
+      onPermissionRequest: async () => ({ kind: 'approved' as const }),
     });
 
     // Send the user prompt and wait for response with extended timeout for CI
@@ -246,6 +247,7 @@ export class AgentSession {
           mode: 'replace',
           content: this.config.systemPrompt,
         },
+        onPermissionRequest: async () => ({ kind: 'approved' as const }),
       });
     }
     return this.session;
