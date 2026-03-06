@@ -1,4 +1,4 @@
-import { createRequire } from 'module'; import { fileURLToPath } from 'url'; const require = createRequire(import.meta.url); const __filename = fileURLToPath(import.meta.url); const __dirname = fileURLToPath(new URL('.', import.meta.url));
+import { createRequire } from 'module'; import { fileURLToPath as __fup } from 'url'; const require = createRequire(import.meta.url); const __filename = __fup(import.meta.url); const __dirname = __fup(new URL('.', import.meta.url));
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;

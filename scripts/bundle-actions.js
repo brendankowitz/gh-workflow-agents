@@ -51,8 +51,10 @@ async function bundleAction(actionName) {
     sourcemap: false,
     external: [], // Bundle everything
     banner: {
-      // Shim for __dirname and __filename in ESM
-      js: `import { createRequire } from 'module'; import { fileURLToPath } from 'url'; const require = createRequire(import.meta.url); const __filename = fileURLToPath(import.meta.url); const __dirname = fileURLToPath(new URL('.', import.meta.url));`,
+      // Shim for __dirname and __filename in ESM.
+      // Use aliased import to avoid duplicate-identifier conflict with
+      // @github/copilot-sdk which also emits `import { fileURLToPath } from "node:url"`.
+      js: `import { createRequire } from 'module'; import { fileURLToPath as __fup } from 'url'; const require = createRequire(import.meta.url); const __filename = __fup(import.meta.url); const __dirname = __fup(new URL('.', import.meta.url));`,
     },
   });
 
