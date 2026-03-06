@@ -274,18 +274,26 @@ export async function summarizeComments(
   // Always start with heuristics — fast and sufficient for many cases
   const heuristic = heuristicSummary(raw);
 
-  // If no interesting signals or no Copilot, heuristics are enough
-  const hasSignals =
+  // Heuristics already gave us a decisive action — no need for AI
+  // (external AI offered, human claimed, or issue resolved are all clear-cut)
+  const isDecisive =
     heuristic.hasExternalAiOffer ||
     heuristic.hasHumanContributorClaim ||
-    heuristic.alreadyResolved ||
-    heuristic.keyDiscoveries.length > 0;
+    heuristic.alreadyResolved;
 
-  if (!hasSignals || !hasCopilotAuth()) {
+  if (isDecisive || !hasCopilotAuth()) {
     return heuristic;
   }
 
-  // Escalate to AI for richer understanding
+  // Only escalate to AI when there ARE comments but no clear action signal,
+  // so the AI can surface key discoveries, blockers, or context the triage
+  // agent should factor into its decision.
+  const hasAnyHumanActivity = raw.some(c => !c.isOurAgent);
+  if (!hasAnyHumanActivity) {
+    return heuristic; // Only our own agent comments — nothing to summarize
+  }
+
+  // Escalate to AI for richer context on complex discussions
   core.info('comment-summarizer: escalating to AI for deeper analysis...');
 
   try {

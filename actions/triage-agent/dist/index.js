@@ -33168,8 +33168,12 @@ async function summarizeComments(octokit, owner, repo, issueNumber, model) {
     return null;
   core3.info(`comment-summarizer: ${raw.length} comment(s) on #${issueNumber}`);
   const heuristic = heuristicSummary(raw);
-  const hasSignals = heuristic.hasExternalAiOffer || heuristic.hasHumanContributorClaim || heuristic.alreadyResolved || heuristic.keyDiscoveries.length > 0;
-  if (!hasSignals || !hasCopilotAuth()) {
+  const isDecisive = heuristic.hasExternalAiOffer || heuristic.hasHumanContributorClaim || heuristic.alreadyResolved;
+  if (isDecisive || !hasCopilotAuth()) {
+    return heuristic;
+  }
+  const hasAnyHumanActivity = raw.some((c) => !c.isOurAgent);
+  if (!hasAnyHumanActivity) {
     return heuristic;
   }
   core3.info("comment-summarizer: escalating to AI for deeper analysis...");
