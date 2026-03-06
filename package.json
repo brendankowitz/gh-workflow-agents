@@ -37,7 +37,7 @@
   "dependencies": {
     "@actions/core": "^1.10.1",
     "@actions/github": "^6.0.0",
-    "@github/copilot-sdk": "^0.1.30",
+    "@github/copilot-sdk": "^0.1.31-unstable.0",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^21.0.0"
   },

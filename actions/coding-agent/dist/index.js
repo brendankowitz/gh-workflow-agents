@@ -31206,12 +31206,18 @@ function createSessionRpc(connection, sessionId) {
     },
     compaction: {
       compact: async () => connection.sendRequest("session.compaction.compact", { sessionId })
+    },
+    tools: {
+      handlePendingToolCall: async (params) => connection.sendRequest("session.tools.handlePendingToolCall", { sessionId, ...params })
+    },
+    permissions: {
+      handlePendingPermissionRequest: async (params) => connection.sendRequest("session.permissions.handlePendingPermissionRequest", { sessionId, ...params })
     }
   };
 }
 
 // node_modules/@github/copilot-sdk/dist/sdkProtocolVersion.js
-var SDK_PROTOCOL_VERSION = 2;
+var SDK_PROTOCOL_VERSION = 3;
 function getSdkProtocolVersion() {
   return SDK_PROTOCOL_VERSION;
 }
@@ -31370,11 +31376,13 @@ var CopilotSession = class {
   }
   /**
    * Dispatches an event to all registered handlers.
+   * Also handles broadcast request events internally (external tool calls, permissions).
    *
    * @param event - The session event to dispatch
    * @internal This method is for internal use by the SDK.
    */
   _dispatchEvent(event) {
+    this._handleBroadcastEvent(event);
     const typedHandlers = this.typedEventHandlers.get(event.type);
     if (typedHandlers) {
       for (const handler2 of typedHandlers) {
@@ -31389,6 +31397,73 @@ var CopilotSession = class {
         handler2(event);
       } catch (_error) {
       }
+    }
+  }
+  /**
+   * Handles broadcast request events by executing local handlers and responding via RPC.
+   * Handlers are dispatched as fire-and-forget — rejections propagate as unhandled promise
+   * rejections, consistent with standard EventEmitter / event handler semantics.
+   * @internal
+   */
+  _handleBroadcastEvent(event) {
+    if (event.type === "external_tool.requested") {
+      const { requestId, toolName } = event.data;
+      const args = event.data.arguments;
+      const toolCallId = event.data.toolCallId;
+      const handler2 = this.toolHandlers.get(toolName);
+      if (handler2) {
+        void this._executeToolAndRespond(requestId, toolName, toolCallId, args, handler2);
+      }
+    } else if (event.type === "permission.requested") {
+      const { requestId, permissionRequest } = event.data;
+      if (this.permissionHandler) {
+        void this._executePermissionAndRespond(requestId, permissionRequest);
+      }
+    }
+  }
+  /**
+   * Executes a tool handler and sends the result back via RPC.
+   * @internal
+   */
+  async _executeToolAndRespond(requestId, toolName, toolCallId, args, handler2) {
+    try {
+      const rawResult = await handler2(args, {
+        sessionId: this.sessionId,
+        toolCallId,
+        toolName,
+        arguments: args
+      });
+      let result;
+      if (rawResult == null) {
+        result = "";
+      } else if (typeof rawResult === "string") {
+        result = rawResult;
+      } else {
+        result = JSON.stringify(rawResult);
+      }
+      await this.rpc.tools.handlePendingToolCall({ requestId, result });
+    } catch (error3) {
+      const message = error3 instanceof Error ? error3.message : String(error3);
+      await this.rpc.tools.handlePendingToolCall({ requestId, error: message });
+    }
+  }
+  /**
+   * Executes a permission handler and sends the result back via RPC.
+   * @internal
+   */
+  async _executePermissionAndRespond(requestId, permissionRequest) {
+    try {
+      const result = await this.permissionHandler(permissionRequest, {
+        sessionId: this.sessionId
+      });
+      await this.rpc.permissions.handlePendingPermissionRequest({ requestId, result });
+    } catch (_error) {
+      await this.rpc.permissions.handlePendingPermissionRequest({
+        requestId,
+        result: {
+          kind: "denied-no-approval-rule-and-could-not-request-from-user"
+        }
+      });
     }
   }
   /**
@@ -31454,26 +31529,6 @@ var CopilotSession = class {
    */
   registerHooks(hooks) {
     this.hooks = hooks;
-  }
-  /**
-   * Handles a permission request from the Copilot CLI.
-   *
-   * @param request - The permission request data from the CLI
-   * @returns A promise that resolves with the permission decision
-   * @internal This method is for internal use by the SDK.
-   */
-  async _handlePermissionRequest(request2) {
-    if (!this.permissionHandler) {
-      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
-    }
-    try {
-      const result = await this.permissionHandler(request2, {
-        sessionId: this.sessionId
-      });
-      return result;
-    } catch (_error) {
-      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
-    }
   }
   /**
    * Handles a user input request from the Copilot CLI.
@@ -31697,6 +31752,11 @@ var CopilotClient = class {
     if (options.cliUrl && (options.useStdio === true || options.cliPath)) {
       throw new Error("cliUrl is mutually exclusive with useStdio and cliPath");
     }
+    if (options.isChildProcess && (options.cliUrl || options.useStdio === false)) {
+      throw new Error(
+        "isChildProcess must be used in conjunction with useStdio and not with cliUrl"
+      );
+    }
     if (options.cliUrl && (options.githubToken || options.useLoggedInUser !== void 0)) {
       throw new Error(
         "githubToken and useLoggedInUser cannot be used with cliUrl (external server manages its own auth)"
@@ -31708,6 +31768,9 @@ var CopilotClient = class {
       this.actualPort = port;
       this.isExternalServer = true;
     }
+    if (options.isChildProcess) {
+      this.isExternalServer = true;
+    }
     this.options = {
       cliPath: options.cliPath || getBundledCliPath(),
       cliArgs: options.cliArgs ?? [],
@@ -31715,6 +31778,7 @@ var CopilotClient = class {
       port: options.port || 0,
       useStdio: options.cliUrl ? false : options.useStdio ?? true,
       // Default to stdio unless cliUrl is provided
+      isChildProcess: options.isChildProcess ?? false,
       cliUrl: options.cliUrl,
       logLevel: options.logLevel || "debug",
       autoStart: options.autoStart ?? true,
@@ -32493,16 +32557,18 @@ stderr: ${stderrOutput}`
    * Connect to the CLI server (via socket or stdio)
    */
   async connectToServer() {
-    if (this.options.useStdio) {
-      return this.connectViaStdio();
+    if (this.options.isChildProcess) {
+      return this.connectToParentProcessViaStdio();
+    } else if (this.options.useStdio) {
+      return this.connectToChildProcessViaStdio();
     } else {
       return this.connectViaTcp();
     }
   }
   /**
-   * Connect via stdio pipes
+   * Connect to child via stdio pipes
    */
-  async connectViaStdio() {
+  async connectToChildProcessViaStdio() {
     if (!this.cliProcess) {
       throw new Error("CLI process not started");
     }
@@ -32514,6 +32580,20 @@ stderr: ${stderrOutput}`
     this.connection = (0, import_node.createMessageConnection)(
       new import_node.StreamMessageReader(this.cliProcess.stdout),
       new import_node.StreamMessageWriter(this.cliProcess.stdin)
+    );
+    this.attachConnectionHandlers();
+    this.connection.listen();
+  }
+  /**
+   * Connect to parent via stdio pipes
+   */
+  async connectToParentProcessViaStdio() {
+    if (this.cliProcess) {
+      throw new Error("CLI child process was unexpectedly started in parent process mode");
+    }
+    this.connection = (0, import_node.createMessageConnection)(
+      new import_node.StreamMessageReader(process.stdin),
+      new import_node.StreamMessageWriter(process.stdout)
     );
     this.attachConnectionHandlers();
     this.connection.listen();
@@ -32551,14 +32631,6 @@ stderr: ${stderrOutput}`
     this.connection.onNotification("session.lifecycle", (notification) => {
       this.handleSessionLifecycleNotification(notification);
     });
-    this.connection.onRequest(
-      "tool.call",
-      async (params) => await this.handleToolCallRequest(params)
-    );
-    this.connection.onRequest(
-      "permission.request",
-      async (params) => await this.handlePermissionRequest(params)
-    );
     this.connection.onRequest(
       "userInput.request",
       async (params) => await this.handleUserInputRequest(params)
@@ -32605,62 +32677,6 @@ stderr: ${stderrOutput}`
       }
     }
   }
-  async handleToolCallRequest(params) {
-    if (!params || typeof params.sessionId !== "string" || typeof params.toolCallId !== "string" || typeof params.toolName !== "string") {
-      throw new Error("Invalid tool call payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Unknown session ${params.sessionId}`);
-    }
-    const handler2 = session.getToolHandler(params.toolName);
-    if (!handler2) {
-      return { result: this.buildUnsupportedToolResult(params.toolName) };
-    }
-    return await this.executeToolCall(handler2, params);
-  }
-  async executeToolCall(handler2, request2) {
-    try {
-      const invocation = {
-        sessionId: request2.sessionId,
-        toolCallId: request2.toolCallId,
-        toolName: request2.toolName,
-        arguments: request2.arguments
-      };
-      const result = await handler2(request2.arguments, invocation);
-      return { result: this.normalizeToolResult(result) };
-    } catch (error3) {
-      const message = error3 instanceof Error ? error3.message : String(error3);
-      return {
-        result: {
-          // Don't expose detailed error information to the LLM for security reasons
-          textResultForLlm: "Invoking this tool produced an error. Detailed information is not available.",
-          resultType: "failure",
-          error: message,
-          toolTelemetry: {}
-        }
-      };
-    }
-  }
-  async handlePermissionRequest(params) {
-    if (!params || typeof params.sessionId !== "string" || !params.permissionRequest) {
-      throw new Error("Invalid permission request payload");
-    }
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${params.sessionId}`);
-    }
-    try {
-      const result = await session._handlePermissionRequest(params.permissionRequest);
-      return { result };
-    } catch (_error) {
-      return {
-        result: {
-          kind: "denied-no-approval-rule-and-could-not-request-from-user"
-        }
-      };
-    }
-  }
   async handleUserInputRequest(params) {
     if (!params || typeof params.sessionId !== "string" || typeof params.question !== "string") {
       throw new Error("Invalid user input request payload");
@@ -32686,36 +32702,6 @@ stderr: ${stderrOutput}`
     }
     const output = await session._handleHooksInvoke(params.hookType, params.input);
     return { output };
-  }
-  normalizeToolResult(result) {
-    if (result === void 0 || result === null) {
-      return {
-        textResultForLlm: "Tool returned no result",
-        resultType: "failure",
-        error: "tool returned no result",
-        toolTelemetry: {}
-      };
-    }
-    if (this.isToolResultObject(result)) {
-      return result;
-    }
-    const textResult = typeof result === "string" ? result : JSON.stringify(result);
-    return {
-      textResultForLlm: textResult,
-      resultType: "success",
-      toolTelemetry: {}
-    };
-  }
-  isToolResultObject(value) {
-    return typeof value === "object" && value !== null && "textResultForLlm" in value && typeof value.textResultForLlm === "string" && "resultType" in value;
-  }
-  buildUnsupportedToolResult(toolName) {
-    return {
-      textResultForLlm: `Tool '${toolName}' is not supported by this client instance.`,
-      resultType: "failure",
-      error: `tool '${toolName}' not supported`,
-      toolTelemetry: {}
-    };
   }
   /**
    * Attempt to reconnect to the server
